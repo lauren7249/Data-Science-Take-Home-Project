@@ -7,8 +7,8 @@ tldr: A machine learning project is only as good as the data that goes into it. 
   are some of the high level aspects of the data that we can discover? How should
   we clean and filter the data?
 tags: []
-updated_at: 2023-04-14 03:52:32.948726
-thumbnail: images/output_22_1.png
+updated_at: 2023-04-14 19:06:43.808011
+thumbnail: images/output_24_1.png
 ---
 
 ```python
@@ -121,7 +121,34 @@ invoices.id.value_counts(dropna=False).value_counts(dropna=False)\
 
 
 ```python
-payments.invoice_id.value_counts(dropna=False).value_counts(dropna=False)\
+#all payments are represented in both datasets 
+len(set(payments.invoice_id) - set(invoices.id))
+```
+
+
+
+
+    0
+
+
+
+
+```python
+#7% of invoices do not have payments yet
+len(set(invoices.id) - set(payments.invoice_id))/invoices.__len__()
+```
+
+
+
+
+    0.07127382057744175
+
+
+
+
+```python
+#invoices usually have one payment but may have more
+payments.invoice_id.value_counts(dropna=False).value_counts(dropna=False, normalize=True)\
 .to_frame(name="invoices").rename_axis('payments_per_invoice')
 ```
 
@@ -156,43 +183,43 @@ payments.invoice_id.value_counts(dropna=False).value_counts(dropna=False)\
   <tbody>
     <tr>
       <th>1</th>
-      <td>98920</td>
+      <td>0.941871</td>
     </tr>
     <tr>
       <th>2</th>
-      <td>5751</td>
+      <td>0.054758</td>
     </tr>
     <tr>
       <th>3</th>
-      <td>268</td>
+      <td>0.002552</td>
     </tr>
     <tr>
       <th>4</th>
-      <td>59</td>
+      <td>0.000562</td>
     </tr>
     <tr>
       <th>5</th>
-      <td>15</td>
+      <td>0.000143</td>
     </tr>
     <tr>
       <th>6</th>
-      <td>8</td>
+      <td>0.000076</td>
     </tr>
     <tr>
       <th>14</th>
-      <td>1</td>
+      <td>0.000010</td>
     </tr>
     <tr>
       <th>9</th>
-      <td>1</td>
+      <td>0.000010</td>
     </tr>
     <tr>
       <th>8</th>
-      <td>1</td>
+      <td>0.000010</td>
     </tr>
     <tr>
       <th>7</th>
-      <td>1</td>
+      <td>0.000010</td>
     </tr>
   </tbody>
 </table>
@@ -200,7 +227,7 @@ payments.invoice_id.value_counts(dropna=False).value_counts(dropna=False)\
 
 
 
-### Transforming Dates to Quantities
+## Transforming Dates to Quantities
 
 
 ```python
@@ -588,7 +615,7 @@ payments.select_dtypes(include='float').hist(bins=50, figsize=(12, 3), layout=(1
 
 
 
-![png](images/output_22_1.png)
+![png](images/output_24_1.png)
 
 
 ### Invoices
@@ -903,7 +930,7 @@ invoices.loc[invoices.invoice_date<payments.transaction_date.min()].__len__())
 
 ### Cleared vs Open 
 
-- Open invoices still have a date cleared
+Open invoices actually have a date cleared, which is a scalar value set to the future. 
 
 
 ```python
@@ -990,7 +1017,6 @@ cleared_invoices = invoices.query("status=='CLEARED'").drop(columns=['status'])
 ```
 
 ```python
-#invoices are either cleared around the normal billing cycle or a year later
 cleared_invoices.days_open.plot(kind='hist',bins=365, title="Cleared Invoices: Days Open", figsize=(12, 3))
 ```
 
@@ -1003,11 +1029,12 @@ cleared_invoices.days_open.plot(kind='hist',bins=365, title="Cleared Invoices: D
 
 
 
-![png](images/output_32_1.png)
+![png](images/output_34_1.png)
 
 
 
 ```python
+#97% of invoices are cleared
 cleared_invoices.__len__()/invoices.__len__()
 ```
 
@@ -1020,7 +1047,7 @@ cleared_invoices.__len__()/invoices.__len__()
 
 
 ```python
-#invoices are either open only in the month they became active or a year later
+#vast majority of cleared invoices are either cleared in the month they opened or a year later
 cleared_invoices.months_open.value_counts(normalize=True, dropna=False)
 ```
 
@@ -1040,7 +1067,7 @@ cleared_invoices.months_open.value_counts(normalize=True, dropna=False)
 
 
 ```python
-#invoices are either due the same month they became active or a year later
+#vast majority of cleared invoices are either due the same month they became active or a year later
 cleared_invoices.months_allowed.value_counts(normalize=True, dropna=False)
 ```
 
@@ -1061,6 +1088,8 @@ cleared_invoices.months_allowed.value_counts(normalize=True, dropna=False)
 
 
 ```python
+#vast majority of cleared invoices are either on time or a year late, suggesting a yearly billing cycle
+#About 1% are a year early. 
 cleared_invoices.months_late.value_counts(normalize=True, dropna=False)
 ```
 
@@ -1084,7 +1113,7 @@ cleared_invoices.months_late.value_counts(normalize=True, dropna=False)
 
 
 ```python
-cleared_invoices['months_late_vs_allowed'] = cleared_invoices.months_late/(cleared_invoices.months_allowed+1)
+cleared_invoices['months_late_vs_allowed'] = cleared_invoices.months_late.div(cleared_invoices.months_allowed+1)
 cleared_invoices.months_late_vs_allowed.value_counts(normalize=True, dropna=False)
 ```
 
@@ -1135,12 +1164,12 @@ cleared_invoices.select_dtypes(include=['float']).hist(bins=50, figsize=(12, 9))
 
 
 
-![png](images/output_38_1.png)
+![png](images/output_40_1.png)
 
 
 ### Exchange Rate
 
-Exchange rates change for both payments and open invoices. Customers would expect to pay the amount they were originally invoiced in their own currency, not the USD amount originally invoiced. Therefore, we should use raw amounts to determine how much is paid vs due. 
+Exchange rates vary for both payments and open invoices. Customers would expect to pay the amount they were originally invoiced in their own currency, not the USD amount originally invoiced. Therefore, we should use raw amounts to determine how much is paid vs due. 
 
 
 ```python
@@ -1158,12 +1187,12 @@ currency_ranges = cleared_invoices.groupby("currency").root_exchange_rate_value.
 
 
 
-![png](images/output_40_1.png)
+![png](images/output_42_1.png)
 
 
 
 ```python
-# a significant % of cleared USD invoices have an exchange rate unequal to 1
+# 1.2% of cleared USD invoices have an exchange rate unequal to 1
 cleared_invoices_usd = cleared_invoices\
 .query("currency=='USD' and months_allowed>=0 and months_allowed<=12 and months_late<=12").copy()
 cleared_invoices_usd['exchange_rate_is_1'] = cleared_invoices_usd['root_exchange_rate_value'] == 1
@@ -1275,13 +1304,9 @@ cleared_invoices_usd.groupby(cleared_invoices_usd.months_to_clear.clip(upper=13,
 
 
 
-![png](images/output_44_1.png)
+![png](images/output_46_1.png)
 
 
-
-```python
-
-```
 ### Merge
 
 - 18% of payments are partial. 
@@ -1290,35 +1315,21 @@ cleared_invoices_usd.groupby(cleared_invoices_usd.months_to_clear.clip(upper=13,
 
 
 ```python
-#all payment invoices are represented in both datasets 
-len(set(payments.invoice_id) - set(invoices.id))
-```
-
-
-
-
-    0
-
-
-
-
-```python
-#7% of invoices do not have payments yet
-len(set(invoices.id) - set(payments.invoice_id))/invoices.__len__()
-```
-
-
-
-
-    0.07127382057744175
-
-
-
-
-```python
 invoice_payments = invoices.rename(columns={"id":"invoice_id","amount_inv":"amount"})\
 .merge(payments, on="invoice_id", how='left', suffixes=('_inv', '_pmt'))
 ```
+
+```python
+invoice_payments.invoice_id.nunique()
+```
+
+
+
+
+    113085
+
+
+
 
 ```python
 duplicated_columns = [col.replace('_pmt','') for col in invoice_payments.columns if col.endswith('_pmt')]
@@ -1340,6 +1351,226 @@ invoice_payments.query("company_id_pmt!=company_id_inv").company_id_pmt.value_co
 
 
     Series([], Name: count, dtype: int64)
+
+
+
+
+```python
+invoice_payments.query("amount_pmt!=amount_inv")[['amount_pmt','amount_inv']].describe()
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>amount_pmt</th>
+      <th>amount_inv</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>count</th>
+      <td>13836.000000</td>
+      <td>21897.000000</td>
+    </tr>
+    <tr>
+      <th>mean</th>
+      <td>5018.916400</td>
+      <td>9967.933614</td>
+    </tr>
+    <tr>
+      <th>std</th>
+      <td>5889.899213</td>
+      <td>5768.578282</td>
+    </tr>
+    <tr>
+      <th>min</th>
+      <td>0.000004</td>
+      <td>2.210771</td>
+    </tr>
+    <tr>
+      <th>25%</th>
+      <td>94.592214</td>
+      <td>4956.197711</td>
+    </tr>
+    <tr>
+      <th>50%</th>
+      <td>2087.812498</td>
+      <td>9941.744191</td>
+    </tr>
+    <tr>
+      <th>75%</th>
+      <td>9183.459468</td>
+      <td>14934.380999</td>
+    </tr>
+    <tr>
+      <th>max</th>
+      <td>19989.986608</td>
+      <td>19999.974875</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+
+```python
+invoice_payments.loc[invoice_payments.amount_pmt>invoice_payments.amount_inv].__len__()
+```
+
+
+
+
+    0
+
+
+
+
+```python
+invoices.query("id==67")
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>id</th>
+      <th>due_date</th>
+      <th>invoice_date</th>
+      <th>status</th>
+      <th>amount_inv</th>
+      <th>currency</th>
+      <th>company_id</th>
+      <th>customer_id</th>
+      <th>account_id</th>
+      <th>cleared_date</th>
+      <th>root_exchange_rate_value</th>
+      <th>days_allowed</th>
+      <th>days_open</th>
+      <th>days_late</th>
+      <th>months_open</th>
+      <th>months_allowed</th>
+      <th>months_late</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>67</th>
+      <td>67</td>
+      <td>2017-01-21 00:10:00</td>
+      <td>2017-01-21 00:09:00</td>
+      <td>CLEARED</td>
+      <td>13860.909842</td>
+      <td>USD</td>
+      <td>114</td>
+      <td>62</td>
+      <td>0</td>
+      <td>2018-01-29 00:01:00</td>
+      <td>1.0</td>
+      <td>0.0</td>
+      <td>372</td>
+      <td>372.0</td>
+      <td>12</td>
+      <td>0.0</td>
+      <td>12.0</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+
+```python
+payments.query("invoice_id==67")
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>amount</th>
+      <th>root_exchange_rate_value</th>
+      <th>transaction_date</th>
+      <th>invoice_id</th>
+      <th>company_id</th>
+      <th>converted_amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>64</th>
+      <td>172.491322</td>
+      <td>1.0</td>
+      <td>2018-01-29 00:01:00</td>
+      <td>67</td>
+      <td>114</td>
+      <td>172.491322</td>
+    </tr>
+    <tr>
+      <th>65</th>
+      <td>13688.418520</td>
+      <td>1.0</td>
+      <td>2018-01-29 00:01:00</td>
+      <td>67</td>
+      <td>114</td>
+      <td>13688.418520</td>
+    </tr>
+  </tbody>
+</table>
+</div>
 
 
 
