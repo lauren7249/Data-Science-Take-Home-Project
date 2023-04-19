@@ -1,5 +1,5 @@
----
-title: Exploratory Data Analysis
+<hr />
+<p>title: Exploratory Data Analysis
 authors:
 - Lauren Talbot
 created_at: 2023-04-13 00:00:00
@@ -8,81 +8,53 @@ tldr: A machine learning project is only as good as the data that goes into it. 
   we clean and filter the data?
 tags: []
 updated_at: 2023-04-19 15:21:59.570359
-thumbnail: images/output_22_1.png
----
-
-```python
-%matplotlib inline
-```
-# Input Datasets  
-
-
-```python
+thumbnail: images/output_22_1.png</p>
+<hr />
+<p><code>python
+%matplotlib inline</code></p>
+<h1>Input Datasets</h1>
+<p><code>python
 import pandas
 data_folder = '../data'
 date_format='%Y-%M-%d' #truncate datetimes to dates
 invoices = pandas.read_csv(data_folder + '/invoice.csv', na_values='inf', 
                            parse_dates=['invoice_date', 'due_date', 'cleared_date'], date_format=date_format)
 payments = pandas.read_csv(data_folder + '/invoice_payments.csv', na_values='inf',
-                           parse_dates=['transaction_date'], date_format=date_format)
-```
-## Dataset Definitions & Relationships
-
-We have two input datasets: invoices and their payments.
+                           parse_dates=['transaction_date'], date_format=date_format)</code></p>
+<h2>Dataset Definitions &amp; Relationships</h2>
+<p>We have two input datasets: invoices and their payments.
 - Payments are amounts in time, which are directly mapped to companies. 
-- Invoices can have multiple payments, but usually only have 1. 
-
-
-```python
-invoices.dtypes
-```
-
-
-
-
-    id                                   int64
-    due_date                    datetime64[ns]
-    invoice_date                datetime64[ns]
-    status                              object
-    amount_inv                         float64
-    currency                            object
-    company_id                           int64
-    customer_id                          int64
-    account_id                           int64
-    cleared_date                datetime64[ns]
-    root_exchange_rate_value           float64
-    dtype: object
-
-
-
-
-```python
-payments.dtypes
-```
-
-
-
-
-    amount                             float64
-    root_exchange_rate_value           float64
-    transaction_date            datetime64[ns]
-    invoice_id                           int64
-    company_id                           int64
-    converted_amount                   float64
-    dtype: object
-
-
-
-
-```python
-#The join key will be invoice_id, so it must be unique (and it is).
-invoices.id.value_counts(dropna=False).value_counts(dropna=False)\
+- Invoices can have multiple payments, but usually only have 1. </p>
+<p><code>python
+invoices.dtypes</code></p>
+<pre><code>id                                   int64
+due_date                    datetime64[ns]
+invoice_date                datetime64[ns]
+status                              object
+amount_inv                         float64
+currency                            object
+company_id                           int64
+customer_id                          int64
+account_id                           int64
+cleared_date                datetime64[ns]
+root_exchange_rate_value           float64
+dtype: object
+</code></pre>
+<p><code>python
+payments.dtypes</code></p>
+<pre><code>amount                             float64
+root_exchange_rate_value           float64
+transaction_date            datetime64[ns]
+invoice_id                           int64
+company_id                           int64
+converted_amount                   float64
+dtype: object
+</code></pre>
+<p>```python</p>
+<h1>The join key will be invoice_id, so it must be unique (and it is).</h1>
+<p>invoices.id.value_counts(dropna=False).value_counts(dropna=False)\
 .to_frame(name="ids").rename_axis('invoices_per_id')
-```
-
-
-
-
+```</p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -117,44 +89,23 @@ invoices.id.value_counts(dropna=False).value_counts(dropna=False)\
 </table>
 </div>
 
-
-
-
-```python
-#all payments are represented in both datasets 
-len(set(payments.invoice_id) - set(invoices.id))
-```
-
-
-
-
-    0
-
-
-
-
-```python
-#7% of invoices do not have payments yet
-len(set(invoices.id) - set(payments.invoice_id))/invoices.__len__()
-```
-
-
-
-
-    0.07127382057744175
-
-
-
-
-```python
-#invoices usually have one payment but may have more
-payments.invoice_id.value_counts(dropna=False).value_counts(dropna=False, normalize=True)\
+<p>```python</p>
+<h1>all payments are represented in both datasets</h1>
+<p>len(set(payments.invoice_id) - set(invoices.id))
+```</p>
+<pre><code>0
+</code></pre>
+<p>```python</p>
+<h1>7% of invoices do not have payments yet</h1>
+<p>len(set(invoices.id) - set(payments.invoice_id))/invoices.<strong>len</strong>()
+```</p>
+<pre><code>0.07127382057744175
+</code></pre>
+<p>```python</p>
+<h1>invoices usually have one payment but may have more</h1>
+<p>payments.invoice_id.value_counts(dropna=False).value_counts(dropna=False, normalize=True)\
 .to_frame(name="invoices").rename_axis('payments_per_invoice')
-```
-
-
-
-
+```</p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -225,22 +176,14 @@ payments.invoice_id.value_counts(dropna=False).value_counts(dropna=False, normal
 </table>
 </div>
 
-
-
-## Entity Definitions & Relationships
-
-- Company: business entity for which Tesorio is forecasting cash collected. There are only two. Each company collects using multiple currencies from multiple customers. 
-- Account: **In this limited dataset, accounts and companies are synonymous, so we ignore accounts.**  
-- Customer: metadata about an invoice which is specific to each company. 
-
-
-```python
-invoices.groupby("company_id")[["customer_id","currency"]].nunique()
-```
-
-
-
-
+<h2>Entity Definitions &amp; Relationships</h2>
+<ul>
+<li>Company: business entity for which Tesorio is forecasting cash collected. There are only two. Each company collects using multiple currencies from multiple customers. </li>
+<li>Account: <strong>In this limited dataset, accounts and companies are synonymous, so we ignore accounts.</strong>  </li>
+<li>Customer: metadata about an invoice which is specific to each company. </li>
+</ul>
+<p><code>python
+invoices.groupby("company_id")[["customer_id","currency"]].nunique()</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -283,17 +226,9 @@ invoices.groupby("company_id")[["customer_id","currency"]].nunique()
 </table>
 </div>
 
-
-
-
-```python
+<p><code>python
 invoices.groupby("customer_id").company_id.nunique().value_counts()\
-.to_frame(name='customers').rename_axis('companies_per_customer')
-```
-
-
-
-
+.to_frame(name='customers').rename_axis('companies_per_customer')</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -328,16 +263,8 @@ invoices.groupby("customer_id").company_id.nunique().value_counts()\
 </table>
 </div>
 
-
-
-
-```python
-invoices.groupby("company_id").account_id.nunique().to_frame(name="unique_accounts")
-```
-
-
-
-
+<p><code>python
+invoices.groupby("company_id").account_id.nunique().to_frame(name="unique_accounts")</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -376,17 +303,9 @@ invoices.groupby("company_id").account_id.nunique().to_frame(name="unique_accoun
 </table>
 </div>
 
-
-
-
-```python
+<p><code>python
 invoices.groupby("account_id").company_id.nunique().value_counts()\
-.to_frame(name='count').rename_axis('companies_per_account')
-```
-
-
-
-
+.to_frame(name='count').rename_axis('companies_per_account')</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -421,36 +340,17 @@ invoices.groupby("account_id").company_id.nunique().value_counts()\
 </table>
 </div>
 
-
-
-## Data Cleaning Needs
-
-### Payments
-
-Transaction data begins in 2011 and ends on 2021-01-31. We will assume this is when the data was pulled. 
-
-
-```python
-payments.__len__()
-```
-
-
-
-
-    111623
-
-
-
-
-```python
+<h2>Data Cleaning Needs</h2>
+<h3>Payments</h3>
+<p>Transaction data begins in 2011 and ends on 2021-01-31. We will assume this is when the data was pulled. </p>
+<p><code>python
+payments.__len__()</code></p>
+<pre><code>111623
+</code></pre>
+<p><code>python
 payment_stats = payments.describe(exclude='int')
 payment_stats.loc['% populated'] = payment_stats.loc['count']/payments.__len__()
-payment_stats
-```
-
-
-
-
+payment_stats</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -543,70 +443,33 @@ payment_stats
 </table>
 </div>
 
-
-
-
-```python
+<p><code>python
 last_transaction_date = payments.transaction_date.max()
-last_transaction_date
-```
-
-
-
-
-    Timestamp('2021-01-31 00:03:00')
-
-
-
-
-```python
-#converted_amount is reliable
-(((payments.amount * payments.root_exchange_rate_value) - payments.converted_amount).abs()).max()
-```
-
-
-
-
-    1.0913936421275139e-11
-
-
-
-
-```python
-payments.select_dtypes(include='float').hist(bins=50, figsize=(12, 3), layout=(1,3))
-```
-
-
-
-
-    array([[<Axes: title={'center': 'amount'}>,
-            <Axes: title={'center': 'root_exchange_rate_value'}>,
-            <Axes: title={'center': 'converted_amount'}>]], dtype=object)
-
-
-
-
-
-![png](images/output_22_1.png)
-
-
-### Invoices
-
-
-```python
-#to compare to payments. Are we holding the customer accountable to USD or their own currency?
-invoices['converted_amount'] = invoices.amount_inv * invoices.root_exchange_rate_value
-```
-
-```python
+last_transaction_date</code></p>
+<pre><code>Timestamp('2021-01-31 00:03:00')
+</code></pre>
+<p>```python</p>
+<h1>converted_amount is reliable</h1>
+<p>(((payments.amount * payments.root_exchange_rate_value) - payments.converted_amount).abs()).max()
+```</p>
+<pre><code>1.0913936421275139e-11
+</code></pre>
+<p><code>python
+payments.select_dtypes(include='float').hist(bins=50, figsize=(12, 3), layout=(1,3))</code></p>
+<pre><code>array([[&lt;Axes: title={'center': 'amount'}&gt;,
+        &lt;Axes: title={'center': 'root_exchange_rate_value'}&gt;,
+        &lt;Axes: title={'center': 'converted_amount'}&gt;]], dtype=object)
+</code></pre>
+<p><img alt="png" src="images/output_22_1.png" /></p>
+<h3>Invoices</h3>
+<p>```python</p>
+<h1>to compare to payments. Are we holding the customer accountable to USD or their own currency?</h1>
+<p>invoices['converted_amount'] = invoices.amount_inv * invoices.root_exchange_rate_value
+```</p>
+<p><code>python
 invoices_stats = invoices.describe(exclude='int')
 invoices_stats.loc['% populated'] = invoices_stats.loc['count']/invoices.__len__()
-invoices_stats
-```
-
-
-
-
+invoices_stats</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -772,75 +635,39 @@ invoices_stats
 </table>
 </div>
 
-
-
-
-```python
-#opened outside of payment data time period - need to filter 
-(invoices.loc[invoices.invoice_date>payments.transaction_date.max()].__len__(), 
-invoices.loc[invoices.invoice_date<payments.transaction_date.min()].__len__())
-```
-
-
-
-
-    (15, 1)
-
-
-
-### Exchange Rate
-
-Exchange rates vary for both payments and open invoices. Customers would expect to pay the amount they were originally invoiced in their own currency, not the USD amount originally invoiced. Therefore, we should use raw amounts to determine how much is paid vs due. 
-
-
-```python
-# USD is not is always 1 - it varies a lot
-currency_ranges = invoices.groupby("currency").root_exchange_rate_value.describe(percentiles=[])
+<p>```python</p>
+<h1>opened outside of payment data time period - need to filter</h1>
+<p>(invoices.loc[invoices.invoice_date&gt;payments.transaction_date.max()].<strong>len</strong>(), 
+invoices.loc[invoices.invoice_date&lt;payments.transaction_date.min()].<strong>len</strong>())
+```</p>
+<pre><code>(15, 1)
+</code></pre>
+<h3>Exchange Rate</h3>
+<p>Exchange rates vary for both payments and open invoices. Customers would expect to pay the amount they were originally invoiced in their own currency, not the USD amount originally invoiced. Therefore, we should use raw amounts to determine how much is paid vs due. </p>
+<p>```python</p>
+<h1>USD is not is always 1 - it varies a lot</h1>
+<p>currency_ranges = invoices.groupby("currency").root_exchange_rate_value.describe(percentiles=[])
 (currency_ranges['max']/currency_ranges['min']).sort_values().plot(kind='bar', title="Exchange Rate Spread Ratio")
-```
-
-
-
-
-    <Axes: title={'center': 'Exchange Rate Spread Ratio'}, xlabel='currency'>
-
-
-
-
-
-![png](images/output_28_1.png)
-
-
-
-```python
-# 1.2% of USD invoices have an exchange rate unequal to 1
-invoices_usd = invoices.query("currency=='USD'").copy()
+```</p>
+<pre><code>&lt;Axes: title={'center': 'Exchange Rate Spread Ratio'}, xlabel='currency'&gt;
+</code></pre>
+<p><img alt="png" src="images/output_28_1.png" /></p>
+<p>```python</p>
+<h1>1.2% of USD invoices have an exchange rate unequal to 1</h1>
+<p>invoices_usd = invoices.query("currency=='USD'").copy()
 invoices_usd['exchange_rate_is_1'] = invoices_usd['root_exchange_rate_value'] == 1
 1 - invoices_usd.exchange_rate_is_1.mean()
-```
-
-
-
-
-    0.015831630376059946
-
-
-
-
-```python
-# USD exchange rate variations from 1 tend to be invoices which took longer to clear
-# This suggests that the invoice exchange rate is "current state data." 
-time_to_clear = invoices_usd.cleared_date - invoices_usd.invoice_date
+```</p>
+<pre><code>0.015831630376059946
+</code></pre>
+<p>```python</p>
+<h1>USD exchange rate variations from 1 tend to be invoices which took longer to clear</h1>
+<h1>This suggests that the invoice exchange rate is "current state data."</h1>
+<p>time_to_clear = invoices_usd.cleared_date - invoices_usd.invoice_date
 invoices_usd['months_to_clear'] = time_to_clear.map(lambda t: round(t.days/30))
-```
-
-```python
-invoices_usd.groupby("exchange_rate_is_1").months_to_clear.agg(['mean','count'])
-```
-
-
-
-
+```</p>
+<p><code>python
+invoices_usd.groupby("exchange_rate_is_1").months_to_clear.agg(['mean','count'])</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -883,51 +710,21 @@ invoices_usd.groupby("exchange_rate_is_1").months_to_clear.agg(['mean','count'])
 </table>
 </div>
 
-
-
-
-```python
+<p><code>python
 invoices_usd.groupby(invoices_usd.months_to_clear.clip(upper=13, lower=-1))\
-.exchange_rate_is_1.mean().plot(title='% of USD Invoices With Exchange Rate Equal to 1', figsize=(12,3))
-```
-
-
-
-
-    <Axes: title={'center': '% of USD Invoices With Exchange Rate Equal to 1'}, xlabel='months_to_clear'>
-
-
-
-
-
-![png](images/output_32_1.png)
-
-
-### Cleared vs Open 
-
-All invoices have a date cleared. 
-When an invoice is open, the date cleared is set to the future, and seems to be an assumed value. 
-
-
-```python
-invoices.loc[invoices.cleared_date.isnull()].__len__()
-```
-
-
-
-
-    0
-
-
-
-
-```python
-invoices.status.value_counts(normalize=True, dropna=False).to_frame(name="% of Invoices")
-```
-
-
-
-
+.exchange_rate_is_1.mean().plot(title='% of USD Invoices With Exchange Rate Equal to 1', figsize=(12,3))</code></p>
+<pre><code>&lt;Axes: title={'center': '% of USD Invoices With Exchange Rate Equal to 1'}, xlabel='months_to_clear'&gt;
+</code></pre>
+<p><img alt="png" src="images/output_32_1.png" /></p>
+<h3>Cleared vs Open</h3>
+<p>All invoices have a date cleared. 
+When an invoice is open, the date cleared is set to the future, and seems to be an assumed value. </p>
+<p><code>python
+invoices.loc[invoices.cleared_date.isnull()].__len__()</code></p>
+<pre><code>0
+</code></pre>
+<p><code>python
+invoices.status.value_counts(normalize=True, dropna=False).to_frame(name="% of Invoices")</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -966,124 +763,63 @@ invoices.status.value_counts(normalize=True, dropna=False).to_frame(name="% of I
 </table>
 </div>
 
-
-
-
-```python
+<p><code>python
 invoices.loc[invoices.cleared_date.isnull() != (invoices.status == 'OPEN'),['status','cleared_date']]\
-.value_counts(dropna=False)
-```
-
-
-
-
-    status  cleared_date       
-    OPEN    2022-01-01 00:01:00    3703
-    Name: count, dtype: int64
-
-
-
-
-```python
-#all open invoices have the same cleared date
-invoices.loc[invoices.status == 'OPEN'].cleared_date.value_counts(dropna=False)
-```
-
-
-
-
-    cleared_date
-    2022-01-01 00:01:00    3703
-    Name: count, dtype: int64
-
-
-
-
-```python
-invoices.loc[invoices.status == 'OPEN', ['invoice_date','due_date']].max()
-```
-
-
-
-
-    invoice_date   2023-01-01 00:01:00
-    due_date       2023-01-31 00:01:00
-    dtype: datetime64[ns]
-
-
-
-
-```python
-(invoices.cleared_date>last_transaction_date).mean()
-```
-
-
-
-
-    0.03274528009904054
-
-
-
-### Merging & Checking for Consistency
-
-- 18% of payments are partial. 
-- No payments are more than their invoices. 
-- Exchange rates vary across payments.
-- Companies are consistent between payments and invoices, when payments are present. 
-- Amounts are more consistent in their original currencies than in USD
-
-
-```python
+.value_counts(dropna=False)</code></p>
+<pre><code>status  cleared_date       
+OPEN    2022-01-01 00:01:00    3703
+Name: count, dtype: int64
+</code></pre>
+<p>```python</p>
+<h1>all open invoices have the same cleared date</h1>
+<p>invoices.loc[invoices.status == 'OPEN'].cleared_date.value_counts(dropna=False)
+```</p>
+<pre><code>cleared_date
+2022-01-01 00:01:00    3703
+Name: count, dtype: int64
+</code></pre>
+<p><code>python
+invoices.loc[invoices.status == 'OPEN', ['invoice_date','due_date']].max()</code></p>
+<pre><code>invoice_date   2023-01-01 00:01:00
+due_date       2023-01-31 00:01:00
+dtype: datetime64[ns]
+</code></pre>
+<p><code>python
+(invoices.cleared_date&gt;last_transaction_date).mean()</code></p>
+<pre><code>0.03274528009904054
+</code></pre>
+<h3>Merging &amp; Checking for Consistency</h3>
+<ul>
+<li>18% of payments are partial. </li>
+<li>No payments are more than their invoices. </li>
+<li>Exchange rates vary across payments.</li>
+<li>Companies are consistent between payments and invoices, when payments are present. </li>
+<li>Amounts are more consistent in their original currencies than in USD</li>
+</ul>
+<p><code>python
 invoice_payments = invoices.rename(columns={"id":"invoice_id","amount_inv":"amount"})\
-.merge(payments, on="invoice_id", how='left', suffixes=('_inv', '_pmt'))
-```
-
-```python
-invoice_payments.invoice_id.nunique()
-```
-
-
-
-
-    113085
-
-
-
-
-```python
+.merge(payments, on="invoice_id", how='left', suffixes=('_inv', '_pmt'))</code></p>
+<p><code>python
+invoice_payments.invoice_id.nunique()</code></p>
+<pre><code>113085
+</code></pre>
+<p><code>python
 duplicated_columns = [col.replace('_pmt','') for col in invoice_payments.columns if col.endswith('_pmt')]
 for col in  duplicated_columns:
     inconsistent_rows = invoice_payments.loc[invoice_payments[col + '_pmt']!=invoice_payments[col + '_inv']]
-    print(f"{col}: {inconsistent_rows.__len__()/invoice_payments.__len__()} inconsistent rows in merged dataset")
-```
+    print(f"{col}: {inconsistent_rows.__len__()/invoice_payments.__len__()} inconsistent rows in merged dataset")</code>
     amount: 0.1829583148818128 inconsistent rows in merged dataset
     root_exchange_rate_value: 0.30690240050800865 inconsistent rows in merged dataset
     company_id: 0.06734456856863548 inconsistent rows in merged dataset
-    converted_amount: 0.3867800773710552 inconsistent rows in merged dataset
-
-
-
-```python
-invoice_payments.query("company_id_pmt!=company_id_inv").company_id_pmt.value_counts(dropna=False)
-```
-
-
-
-
-    company_id_pmt
-    NaN    8060
-    Name: count, dtype: int64
-
-
-
-
-```python
-invoice_payments.query("amount_pmt!=amount_inv")[['amount_pmt','amount_inv']].describe()
-```
-
-
-
-
+    converted_amount: 0.3867800773710552 inconsistent rows in merged dataset</p>
+<p><code>python
+invoice_payments.query("company_id_pmt!=company_id_inv").company_id_pmt.value_counts(dropna=False)</code></p>
+<pre><code>company_id_pmt
+NaN    8060
+Name: count, dtype: int64
+</code></pre>
+<p><code>python
+invoice_payments.query("amount_pmt!=amount_inv")[['amount_pmt','amount_inv']].describe()</code></p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -1151,236 +887,134 @@ invoice_payments.query("amount_pmt!=amount_inv")[['amount_pmt','amount_inv']].de
 </table>
 </div>
 
-
-
-
-```python
-#no payment is more than the invoice amount in the original currency
-invoice_payments.loc[invoice_payments.amount_pmt>invoice_payments.amount_inv].__len__()
-```
-
-
-
-
-    0
-
-
-
-
-```python
-#converting to USD creates payments that are higher than invoice totals
-invoice_payments.loc[invoice_payments.converted_amount_pmt>invoice_payments.converted_amount_inv].__len__()
-```
-
-
-
-
-    11075
-
-
-
-
-```python
+<p>```python</p>
+<h1>no payment is more than the invoice amount in the original currency</h1>
+<p>invoice_payments.loc[invoice_payments.amount_pmt&gt;invoice_payments.amount_inv].<strong>len</strong>()
+```</p>
+<pre><code>0
+</code></pre>
+<p>```python</p>
+<h1>converting to USD creates payments that are higher than invoice totals</h1>
+<p>invoice_payments.loc[invoice_payments.converted_amount_pmt&gt;invoice_payments.converted_amount_inv].<strong>len</strong>()
+```</p>
+<pre><code>11075
+</code></pre>
+<p><code>python
 invoice_payments_rollup = invoice_payments.groupby("invoice_id", 
                                     as_index=False).agg({"amount_pmt":['sum','count'],
                                                          "transaction_date":['min','max']})
 invoice_payments_rollup.columns = invoice_payments_rollup.columns.to_flat_index().map('_'.join)
 payment_totals = invoices.merge(invoice_payments_rollup, how="left", left_on="id", right_on="invoice_id_")
-payment_totals['amount_remaining'] = payment_totals.amount_inv - payment_totals.amount_pmt_sum
-```
-#### Cleared invoices 
-
-Invoices with cleared dates or statuses can still have amounts remaining. 1% of cleared invoices were overpaid.
-
-
-```python
-#For invoices with a cleared date, the totals do not match 10% of the time
-cleared_invoices = payment_totals.loc[payment_totals.cleared_date.isnull()==False].copy()
+payment_totals['amount_remaining'] = payment_totals.amount_inv - payment_totals.amount_pmt_sum</code></p>
+<h4>Cleared invoices</h4>
+<p>Invoices with cleared dates or statuses can still have amounts remaining. 1% of cleared invoices were overpaid.</p>
+<p>```python</p>
+<h1>For invoices with a cleared date, the totals do not match 10% of the time</h1>
+<p>cleared_invoices = payment_totals.loc[payment_totals.cleared_date.isnull()==False].copy()
 1 - (cleared_invoices.amount_remaining==0).mean()
-```
-
-
-
-
-    0.10322323915638676
-
-
-
-
-```python
-#For invoices with "cleared" status, totals do not match 7% of the time
-cleared_invoices = payment_totals.loc[payment_totals.status=='CLEARED'].copy()
+```</p>
+<pre><code>0.10322323915638676
+</code></pre>
+<p>```python</p>
+<h1>For invoices with "cleared" status, totals do not match 7% of the time</h1>
+<p>cleared_invoices = payment_totals.loc[payment_totals.status=='CLEARED'].copy()
 1 - (cleared_invoices.amount_remaining==0).mean()
-```
-
-
-
-
-    0.07288219268252549
-
-
-
-
-```python
-# 1% of cleared invoices have been overpaid according to payments data. 
-(cleared_invoices.amount_remaining<0).mean()
-```
-
-
-
-
-    0.010522755115101205
-
-
-
-
-```python
-#only half of these seem to be late fees
-overpayments = cleared_invoices.query("amount_remaining<0")
-(overpayments.cleared_date>overpayments.due_date).mean()
-```
-
-
-
-
-    0.5716768027801912
-
-
-
-#### Fully collected invoices
-
-- Can still be open (rarely). 
-- Almost always cleared with the last transaction, after converting to monthly periods. 
-- These may represent late fees. 
-
-
-```python
+```</p>
+<pre><code>0.07288219268252549
+</code></pre>
+<p>```python</p>
+<h1>1% of cleared invoices have been overpaid according to payments data.</h1>
+<p>(cleared_invoices.amount_remaining&lt;0).mean()
+```</p>
+<pre><code>0.010522755115101205
+</code></pre>
+<p>```python</p>
+<h1>only half of these seem to be late fees</h1>
+<p>overpayments = cleared_invoices.query("amount_remaining&lt;0")
+(overpayments.cleared_date&gt;overpayments.due_date).mean()
+```</p>
+<pre><code>0.5716768027801912
+</code></pre>
+<h4>Fully collected invoices</h4>
+<ul>
+<li>Can still be open (rarely). </li>
+<li>Almost always cleared with the last transaction, after converting to monthly periods. </li>
+<li>These may represent late fees. </li>
+</ul>
+<p><code>python
 collected_invoices = payment_totals.query("amount_remaining==0").copy()
-collected_invoices.status.value_counts(normalize=True, dropna=False)
-```
-
-
-
-
-    status
-    CLEARED    0.99998
-    OPEN       0.00002
-    Name: proportion, dtype: float64
-
-
-
-
-```python
-(collected_invoices.cleared_date-collected_invoices.transaction_date_max).describe()
-```
-
-
-
-
-    count                        101412
-    mean      3 days 17:20:24.789965684
-    std      42 days 12:41:59.168706657
-    min              -30 days +00:01:00
-    25%                 0 days 00:00:00
-    50%                 0 days 00:00:00
-    75%                 0 days 00:00:00
-    max              1112 days 23:55:00
-    dtype: object
-
-
-
-
-```python
-(collected_invoices.cleared_date.dt.to_period('M')<collected_invoices.transaction_date_max.dt.to_period('M'))\
-.mean()
-```
-
-
-
-
-    0.0
-
-
-
-
-```python
-(collected_invoices.cleared_date.dt.to_period('M')>collected_invoices.transaction_date_max.dt.to_period('M'))\
-.mean()
-```
-
-
-
-
-    0.008815524789965685
-
-
-
-## Transforming Dates to Quantities
-
-
-```python
+collected_invoices.status.value_counts(normalize=True, dropna=False)</code></p>
+<pre><code>status
+CLEARED    0.99998
+OPEN       0.00002
+Name: proportion, dtype: float64
+</code></pre>
+<p><code>python
+(collected_invoices.cleared_date-collected_invoices.transaction_date_max).describe()</code></p>
+<pre><code>count                        101412
+mean      3 days 17:20:24.789965684
+std      42 days 12:41:59.168706657
+min              -30 days +00:01:00
+25%                 0 days 00:00:00
+50%                 0 days 00:00:00
+75%                 0 days 00:00:00
+max              1112 days 23:55:00
+dtype: object
+</code></pre>
+<p><code>python
+(collected_invoices.cleared_date.dt.to_period('M')&lt;collected_invoices.transaction_date_max.dt.to_period('M'))\
+.mean()</code></p>
+<pre><code>0.0
+</code></pre>
+<p><code>python
+(collected_invoices.cleared_date.dt.to_period('M')&gt;collected_invoices.transaction_date_max.dt.to_period('M'))\
+.mean()</code></p>
+<pre><code>0.008815524789965685
+</code></pre>
+<h2>Transforming Dates to Quantities</h2>
+<p><code>python
 invoice_time_allowed = invoices.due_date - invoices.invoice_date
 invoice_time_open = invoices.cleared_date - invoices.invoice_date
-invoice_time_late = invoice_time_open - invoice_time_allowed
-```
-
-```python
+invoice_time_late = invoice_time_open - invoice_time_allowed</code></p>
+<p>```python
 invoices['days_allowed'] = invoice_time_allowed.map(lambda t: t.days if not pandas.isnull(t) else None)
 invoices['days_open'] = invoice_time_open.map(lambda t: t.days if not pandas.isnull(t) else None)
-invoices['days_late'] = invoice_time_late.map(lambda t: t.days if not pandas.isnull(t) else None)
-
-invoices['months_allowed'] = (invoices.due_date.dt.to_period('M') - invoices.invoice_date.dt.to_period('M'))
+invoices['days_late'] = invoice_time_late.map(lambda t: t.days if not pandas.isnull(t) else None)</p>
+<p>invoices['months_allowed'] = (invoices.due_date.dt.to_period('M') - invoices.invoice_date.dt.to_period('M'))
 invoices.months_allowed = invoices.months_allowed.map(lambda m: m.n if not pandas.isnull(m) else None)
 invoices['months_open'] = (invoices.cleared_date.dt.to_period('M') - invoices.invoice_date.dt.to_period('M'))
 invoices.months_open = invoices.months_open.map(lambda m: m.n if not pandas.isnull(m) else None)
 invoices['months_late'] = (invoices.cleared_date.dt.to_period('M') - invoices.due_date.dt.to_period('M'))
 invoices.months_late = invoices.months_late.map(lambda m: m.n if not pandas.isnull(m) else None)
-```
-## Break Down Invoices By Period
-
-Create periods from invoice date to close date
+```</p>
+<h2>Break Down Invoices By Period</h2>
+<p>Create periods from invoice date to close date
 Rolling payment window: due_date - current period
-Rolling days open: cleared_date - current period 
-
-## Assumptions
-
-- Invoices that are cleared will have their total amount paid off, no more, no less
-- Invoices will only be scored if they are open at that point in time 
-- 
-
-# Metadata Calculations & Cleaning
-
-Totals, Uniques, Averages, Ranges, Outliers, Missings
-Variables: Invoices, USD Amounts, Cleared/Open, Due Date, Invoice Date, Transaction Date, Customers, Companies, Accounts
-
-# Notes
-
-## Notable entities
-
-e.g. customers with notable values
-
-## Sparsity
-
-### Entities
-
-### Date Periods
-
-## Trends Over Time
-
-# Analysis
-
-## Business Motivation
-
-Cash collections don't follow due dates
-
-## Data Science Benchmark
-
-Define & Quantify: customers' mean absolute % error each period from cash due.
-
-## Data Science Target
-
-Best outcome variable? 
+Rolling days open: cleared_date - current period </p>
+<h2>Assumptions</h2>
+<ul>
+<li>Invoices that are cleared will have their total amount paid off, no more, no less</li>
+<li>Invoices will only be scored if they are open at that point in time </li>
+<li></li>
+</ul>
+<h1>Metadata Calculations &amp; Cleaning</h1>
+<p>Totals, Uniques, Averages, Ranges, Outliers, Missings
+Variables: Invoices, USD Amounts, Cleared/Open, Due Date, Invoice Date, Transaction Date, Customers, Companies, Accounts</p>
+<h1>Notes</h1>
+<h2>Notable entities</h2>
+<p>e.g. customers with notable values</p>
+<h2>Sparsity</h2>
+<h3>Entities</h3>
+<h3>Date Periods</h3>
+<h2>Trends Over Time</h2>
+<h1>Analysis</h1>
+<h2>Business Motivation</h2>
+<p>Cash collections don't follow due dates</p>
+<h2>Data Science Benchmark</h2>
+<p>Define &amp; Quantify: customers' mean absolute % error each period from cash due.</p>
+<h2>Data Science Target</h2>
+<p>Best outcome variable? 
 Days late
 Days open (Total and Rolling)
 Days Open as a % of Payment Window (Total and Rolling)
-Days Late as a % of Payment Window (Total and Rolling)
+Days Late as a % of Payment Window (Total and Rolling)</p>

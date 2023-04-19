@@ -2,13 +2,10 @@ import pandas
 from collections import OrderedDict
 
 
-def periods_between(start_date: pandas.Series, end_date: pandas.Series):
-    df = pandas.DataFrame(index=start_date.index, columns=['days', 'months'])
-    timedelta = (end_date - start_date)
-    df.days = timedelta.map(lambda t: t.days if not pandas.isnull(t) else None)
-    df.months = (end_date.dt.to_period('M') - start_date.dt.to_period('M'))
-    df.months = df.months.map(lambda m: m.n if not pandas.isnull(m) else None)
-    return df
+def months_between(start_date: pandas.Series, end_date: pandas.Series):
+    months = (end_date.dt.to_period('M') - start_date.dt.to_period('M'))
+    months = months.map(lambda m: m.n if not pandas.isnull(m) else None)
+    return months
 
 
 def apply_filters(filters: OrderedDict, apply_to_df: pandas.DataFrame):
@@ -34,6 +31,8 @@ def prepare_payments(payments: pandas.DataFrame):
     assert payments.root_exchange_rate_value.count() == payments.__len__(), 'Missing exchange rates'
     assert payments.root_exchange_rate_value.min() > 0, 'Exchange rates <= 0'
     assert payments.amount.min() > 0, 'Amounts <= 0'
+    assert (payments.amount.isnull() == payments.converted_amount.isnull()).min() == 1, \
+        'Converted amounts populated inconsistently from amounts'
     payments_prepared = payments.drop(columns=['company_id', 'converted_amount'], errors='ignore')
     exclude_payments = OrderedDict({'Missing Amount': payments_prepared.loc[payments_prepared.amount.isnull()]})
     return apply_filters(exclude_payments, payments_prepared)
@@ -51,26 +50,21 @@ def prepare_invoices(invoices: pandas.DataFrame, date_range: pandas.DatetimeInde
     assert invoices.root_exchange_rate_value.min() > 0, 'Exchange rates <= 0'
     assert invoices.amount_inv.min() > 0, 'Amounts <= 0'
 
-    invoices_prepared = invoices.rename(columns={"id": "invoice_id", "amount_inv":"amount"})\
-        .join(periods_between(invoices.invoice_date, invoices.due_date))\
-        .join(periods_between(invoices.invoice_date, invoices.cleared_date), rsuffix='_open')\
-        .join(periods_between(invoices.due_date, invoices.cleared_date), rsuffix='_late', lsuffix='_allowed')
+    invoices_prepared = invoices.rename(columns={"id": "invoice_id", "amount_inv": "amount"})
     invoices_prepared.drop(columns=['account_id'], inplace=True, errors='ignore')
+    invoices_prepared['months_allowed'] = months_between(invoices_prepared.invoice_date, invoices_prepared.due_date)
     exclude_invoices = OrderedDict()
     exclude_invoices['Missing due date'] = invoices_prepared.loc[invoices_prepared.due_date.isnull()]
     exclude_invoices['Opened outside of Payment data time period'] = invoices_prepared.loc[
         (invoices_prepared.invoice_date > date_range.max()) | (invoices_prepared.invoice_date < date_range.min())]
-    # filters out open invoices
-    exclude_invoices['Inconsistency between cleared date and status '] = \
-        invoices.loc[invoices.cleared_date.isnull() != (invoices.status == 'OPEN')]
-    exclude_invoices['Never active in open state'] = invoices_prepared.loc[invoices_prepared.months_open < 0]
     exclude_invoices['Due before active'] = invoices_prepared.loc[invoices_prepared.months_allowed < 0]
     exclude_invoices['Due over a year after opening '] = invoices_prepared.loc[invoices_prepared.months_allowed > 12]
-    exclude_invoices['Open over a year'] = invoices_prepared.loc[invoices_prepared.months_open > 12]
     return apply_filters(exclude_invoices, invoices_prepared)
 
 
 def prepare_raw_inputs(invoices: pandas.DataFrame, payments: pandas.DataFrame):
+    """ Takes in invoices and payments and prepares them to be scored at a point in time. Can be open or closed when
+     scored. Closed invoices would be used for model training. """
     payments_prepared, payment_filter_stats = prepare_payments(payments)
     payments_date_range = pandas.date_range(start=payments.transaction_date.min(), end=payments.transaction_date.max(),
                                             periods=2)
@@ -104,7 +98,7 @@ def test():
     consolidated_data, filter_stats = prepare_raw_inputs(invoices, payments)
     print(filter_stats)
     print(consolidated_data.columns)
-    assert list(consolidated_data.status.unique()) == ['CLEARED']
+    #assert list(consolidated_data.status.unique()) == ['CLEARED']
 
 
 if __name__ == "__main__":
