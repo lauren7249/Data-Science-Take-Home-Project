@@ -7,8 +7,8 @@ tldr: A machine learning project is only as good as the data that goes into it. 
   are some of the high level aspects of the data that we can discover? How should
   we clean and filter the data?
 tags: []
-updated_at: 2023-04-19 15:21:59.570359
-thumbnail: images/output_22_1.png
+updated_at: 2023-04-20 03:43:43.303675
+thumbnail: images/output_23_1.png
 ---
 
 ```python
@@ -548,13 +548,14 @@ payment_stats
 
 ```python
 last_transaction_date = payments.transaction_date.max()
-last_transaction_date
+first_transaction_date = payments.transaction_date.min()
+first_transaction_date, last_transaction_date
 ```
 
 
 
 
-    Timestamp('2021-01-31 00:03:00')
+    (Timestamp('2011-01-01 00:05:00'), Timestamp('2021-01-31 00:03:00'))
 
 
 
@@ -568,6 +569,18 @@ last_transaction_date
 
 
     1.0913936421275139e-11
+
+
+
+
+```python
+payments[payments.amount.isnull()!=payments.converted_amount.isnull()].__len__()
+```
+
+
+
+
+    0
 
 
 
@@ -587,11 +600,32 @@ payments.select_dtypes(include='float').hist(bins=50, figsize=(12, 3), layout=(1
 
 
 
-![png](images/output_22_1.png)
+![png](images/output_23_1.png)
 
 
 ### Invoices
 
+
+```python
+#opened outside of payment data time period or after they were due - need to filter 
+(invoices.loc[invoices.invoice_date>last_transaction_date].__len__(), 
+invoices.loc[invoices.invoice_date<first_transaction_date].__len__(), 
+invoices.loc[invoices.invoice_date.dt.to_period('M')>invoices.due_date.dt.to_period('M')].__len__())
+```
+
+
+
+
+    (15, 1, 8)
+
+
+
+
+```python
+invoices = invoices.loc[(invoices.invoice_date>=first_transaction_date) &
+                        (invoices.invoice_date<=last_transaction_date) & 
+                        (invoices.invoice_date.dt.to_period('M')<=invoices.due_date.dt.to_period('M'))]
+```
 
 ```python
 #to compare to payments. Are we holding the customer accountable to USD or their own currency?
@@ -638,14 +672,14 @@ invoices_stats
   <tbody>
     <tr>
       <th>count</th>
-      <td>113060</td>
-      <td>113085</td>
-      <td>113085</td>
-      <td>113085.000000</td>
-      <td>113085</td>
-      <td>113085</td>
-      <td>113085.000000</td>
-      <td>113085.000000</td>
+      <td>113036</td>
+      <td>113036</td>
+      <td>113036</td>
+      <td>113036.000000</td>
+      <td>113036</td>
+      <td>113036</td>
+      <td>113036.000000</td>
+      <td>113036.000000</td>
     </tr>
     <tr>
       <th>unique</th>
@@ -673,28 +707,28 @@ invoices_stats
       <th>freq</th>
       <td>NaN</td>
       <td>NaN</td>
-      <td>109382</td>
+      <td>109348</td>
       <td>NaN</td>
-      <td>85146</td>
+      <td>85108</td>
       <td>NaN</td>
       <td>NaN</td>
       <td>NaN</td>
     </tr>
     <tr>
       <th>mean</th>
-      <td>2017-10-18 01:21:46.726340096</td>
-      <td>2017-09-09 19:59:16.684971776</td>
+      <td>2017-10-17 22:28:07.196645632</td>
+      <td>2017-09-09 17:55:30.649704448</td>
       <td>NaN</td>
-      <td>10026.599910</td>
+      <td>10026.752277</td>
       <td>NaN</td>
-      <td>2017-11-18 00:39:17.928637952</td>
-      <td>0.970822</td>
-      <td>9742.189020</td>
+      <td>2017-11-17 22:46:37.326692352</td>
+      <td>0.970802</td>
+      <td>9742.174421</td>
     </tr>
     <tr>
       <th>min</th>
-      <td>2010-01-07 00:09:00</td>
-      <td>2010-01-21 00:12:00</td>
+      <td>2011-01-01 00:05:00</td>
+      <td>2011-01-01 00:05:00</td>
       <td>NaN</td>
       <td>0.027581</td>
       <td>NaN</td>
@@ -707,38 +741,38 @@ invoices_stats
       <td>2016-01-20 00:05:00</td>
       <td>2016-01-18 00:08:00</td>
       <td>NaN</td>
-      <td>5030.122601</td>
+      <td>5030.646720</td>
       <td>NaN</td>
       <td>2016-01-21 00:08:00</td>
       <td>1.000000</td>
-      <td>4161.945155</td>
+      <td>4161.228596</td>
     </tr>
     <tr>
       <th>50%</th>
       <td>2018-01-22 00:04:00</td>
       <td>2018-01-20 00:05:00</td>
       <td>NaN</td>
-      <td>10018.092660</td>
+      <td>10017.743195</td>
       <td>NaN</td>
       <td>2018-01-24 00:04:00</td>
       <td>1.000000</td>
-      <td>9587.398549</td>
+      <td>9587.389379</td>
     </tr>
     <tr>
       <th>75%</th>
       <td>2020-01-11 00:07:00</td>
-      <td>2020-01-08 00:12:00</td>
+      <td>2020-01-08 00:11:00</td>
       <td>NaN</td>
-      <td>15029.685611</td>
+      <td>15030.595146</td>
       <td>NaN</td>
       <td>2020-01-10 00:05:00</td>
       <td>1.000000</td>
-      <td>15057.375121</td>
+      <td>15058.319044</td>
     </tr>
     <tr>
       <th>max</th>
-      <td>2023-01-31 00:01:00</td>
-      <td>2023-01-01 00:01:00</td>
+      <td>2022-01-15 00:01:00</td>
+      <td>2021-01-31 00:03:00</td>
       <td>NaN</td>
       <td>19999.974875</td>
       <td>NaN</td>
@@ -751,15 +785,15 @@ invoices_stats
       <td>NaN</td>
       <td>NaN</td>
       <td>NaN</td>
-      <td>5767.833365</td>
+      <td>5767.870567</td>
       <td>NaN</td>
       <td>NaN</td>
-      <td>0.246109</td>
-      <td>6286.160100</td>
+      <td>0.246155</td>
+      <td>6286.335744</td>
     </tr>
     <tr>
       <th>% populated</th>
-      <td>0.999779</td>
+      <td>1.0</td>
       <td>1.0</td>
       <td>1.0</td>
       <td>1.000000</td>
@@ -776,15 +810,20 @@ invoices_stats
 
 
 ```python
-#opened outside of payment data time period - need to filter 
-(invoices.loc[invoices.invoice_date>payments.transaction_date.max()].__len__(), 
-invoices.loc[invoices.invoice_date<payments.transaction_date.min()].__len__())
+invoices['months_allowed'] = invoices.due_date.dt.to_period('M') - invoices.invoice_date.dt.to_period('M')
+invoices.months_allowed = invoices.months_allowed.map(lambda m: m.n if not pandas.isnull(m) else None)
+#almost all invoices are due immediately or in 1 year. should filter out the rest
+invoices.months_allowed.value_counts(normalize=True, dropna=False)
 ```
 
 
 
 
-    (15, 1)
+    months_allowed
+    0     0.893556
+    12    0.106426
+    24    0.000018
+    Name: proportion, dtype: float64
 
 
 
@@ -808,12 +847,12 @@ currency_ranges = invoices.groupby("currency").root_exchange_rate_value.describe
 
 
 
-![png](images/output_28_1.png)
+![png](images/output_31_1.png)
 
 
 
 ```python
-# 1.2% of USD invoices have an exchange rate unequal to 1
+# 1.6% of USD invoices have an exchange rate unequal to 1
 invoices_usd = invoices.query("currency=='USD'").copy()
 invoices_usd['exchange_rate_is_1'] = invoices_usd['root_exchange_rate_value'] == 1
 1 - invoices_usd.exchange_rate_is_1.mean()
@@ -822,7 +861,7 @@ invoices_usd['exchange_rate_is_1'] = invoices_usd['root_exchange_rate_value'] ==
 
 
 
-    0.015831630376059946
+    0.015756450627438023
 
 
 
@@ -871,13 +910,13 @@ invoices_usd.groupby("exchange_rate_is_1").months_to_clear.agg(['mean','count'])
   <tbody>
     <tr>
       <th>False</th>
-      <td>3.562315</td>
-      <td>1348</td>
+      <td>3.553318</td>
+      <td>1341</td>
     </tr>
     <tr>
       <th>True</th>
-      <td>2.104239</td>
-      <td>83798</td>
+      <td>2.104444</td>
+      <td>83767</td>
     </tr>
   </tbody>
 </table>
@@ -900,10 +939,10 @@ invoices_usd.groupby(invoices_usd.months_to_clear.clip(upper=13, lower=-1))\
 
 
 
-![png](images/output_32_1.png)
+![png](images/output_35_1.png)
 
 
-### Cleared vs Open 
+### Invoice status vs cleared date
 
 All invoices have a date cleared. 
 When an invoice is open, the date cleared is set to the future, and seems to be an assumed value. 
@@ -956,11 +995,11 @@ invoices.status.value_counts(normalize=True, dropna=False).to_frame(name="% of I
   <tbody>
     <tr>
       <th>CLEARED</th>
-      <td>0.967255</td>
+      <td>0.967373</td>
     </tr>
     <tr>
       <th>OPEN</th>
-      <td>0.032745</td>
+      <td>0.032627</td>
     </tr>
   </tbody>
 </table>
@@ -978,14 +1017,14 @@ invoices.loc[invoices.cleared_date.isnull() != (invoices.status == 'OPEN'),['sta
 
 
     status  cleared_date       
-    OPEN    2022-01-01 00:01:00    3703
+    OPEN    2022-01-01 00:01:00    3688
     Name: count, dtype: int64
 
 
 
 
 ```python
-#all open invoices have the same cleared date
+#all open invoices have the same cleared date, which is in the future relative to the latest transaction
 invoices.loc[invoices.status == 'OPEN'].cleared_date.value_counts(dropna=False)
 ```
 
@@ -993,44 +1032,79 @@ invoices.loc[invoices.status == 'OPEN'].cleared_date.value_counts(dropna=False)
 
 
     cleared_date
-    2022-01-01 00:01:00    3703
+    2022-01-01 00:01:00    3688
     Name: count, dtype: int64
 
 
 
 
 ```python
-invoices.loc[invoices.status == 'OPEN', ['invoice_date','due_date']].max()
+#all cleared invoices have a cleared date before or on the date of the latest transaction
+invoices.loc[invoices.status == 'CLEARED', 'cleared_date'].max()
 ```
 
 
 
 
-    invoice_date   2023-01-01 00:01:00
-    due_date       2023-01-31 00:01:00
-    dtype: datetime64[ns]
+    Timestamp('2021-01-31 00:03:00')
 
 
 
 
 ```python
-(invoices.cleared_date>last_transaction_date).mean()
+#some open invoices are already active, whereas some become active in the future
+invoices.loc[invoices.status == 'OPEN', ['invoice_date','due_date']].agg(['max','min'])
 ```
 
 
 
 
-    0.03274528009904054
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>invoice_date</th>
+      <th>due_date</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>max</th>
+      <td>2021-01-31 00:03:00</td>
+      <td>2022-01-15 00:01:00</td>
+    </tr>
+    <tr>
+      <th>min</th>
+      <td>2019-01-03 00:09:00</td>
+      <td>2019-01-03 00:10:00</td>
+    </tr>
+  </tbody>
+</table>
+</div>
 
 
 
 ### Merging & Checking for Consistency
 
-- 18% of payments are partial. 
-- No payments are more than their invoices. 
+- Invoices must become active within the date range of the transactions data to ensure completeness.
+- No individual payments are more than their invoices. 
 - Exchange rates vary across payments.
 - Companies are consistent between payments and invoices, when payments are present. 
-- Amounts are more consistent in their original currencies than in USD
+- Amounts make the most sense in their original currencies vs in USD
 
 
 ```python
@@ -1045,7 +1119,7 @@ invoice_payments.invoice_id.nunique()
 
 
 
-    113085
+    113036
 
 
 
@@ -1056,10 +1130,10 @@ for col in  duplicated_columns:
     inconsistent_rows = invoice_payments.loc[invoice_payments[col + '_pmt']!=invoice_payments[col + '_inv']]
     print(f"{col}: {inconsistent_rows.__len__()/invoice_payments.__len__()} inconsistent rows in merged dataset")
 ```
-    amount: 0.1829583148818128 inconsistent rows in merged dataset
-    root_exchange_rate_value: 0.30690240050800865 inconsistent rows in merged dataset
-    company_id: 0.06734456856863548 inconsistent rows in merged dataset
-    converted_amount: 0.3867800773710552 inconsistent rows in merged dataset
+    amount: 0.18279318214115542 inconsistent rows in merged dataset
+    root_exchange_rate_value: 0.30674513278774856 inconsistent rows in merged dataset
+    company_id: 0.06722562632181699 inconsistent rows in merged dataset
+    converted_amount: 0.38665184281140547 inconsistent rows in merged dataset
 
 
 
@@ -1071,7 +1145,7 @@ invoice_payments.query("company_id_pmt!=company_id_inv").company_id_pmt.value_co
 
 
     company_id_pmt
-    NaN    8060
+    NaN    8042
     Name: count, dtype: int64
 
 
@@ -1109,18 +1183,18 @@ invoice_payments.query("amount_pmt!=amount_inv")[['amount_pmt','amount_inv']].de
   <tbody>
     <tr>
       <th>count</th>
-      <td>13836.000000</td>
-      <td>21897.000000</td>
+      <td>13824.000000</td>
+      <td>21867.000000</td>
     </tr>
     <tr>
       <th>mean</th>
-      <td>5018.916400</td>
-      <td>9967.933614</td>
+      <td>5019.564845</td>
+      <td>9966.640444</td>
     </tr>
     <tr>
       <th>std</th>
-      <td>5889.899213</td>
-      <td>5768.578282</td>
+      <td>5890.300951</td>
+      <td>5768.272356</td>
     </tr>
     <tr>
       <th>min</th>
@@ -1129,18 +1203,18 @@ invoice_payments.query("amount_pmt!=amount_inv")[['amount_pmt','amount_inv']].de
     </tr>
     <tr>
       <th>25%</th>
-      <td>94.592214</td>
-      <td>4956.197711</td>
+      <td>94.819108</td>
+      <td>4955.695498</td>
     </tr>
     <tr>
       <th>50%</th>
-      <td>2087.812498</td>
-      <td>9941.744191</td>
+      <td>2088.978587</td>
+      <td>9941.009610</td>
     </tr>
     <tr>
       <th>75%</th>
-      <td>9183.459468</td>
-      <td>14934.380999</td>
+      <td>9185.545594</td>
+      <td>14935.048061</td>
     </tr>
     <tr>
       <th>max</th>
@@ -1175,124 +1249,857 @@ invoice_payments.loc[invoice_payments.converted_amount_pmt>invoice_payments.conv
 
 
 
-    11075
+    11072
+
+
+
+### Business Questions for the Data
+
+
+```python
+invoice_payments['amount_pmt_pct'] = (invoice_payments.amount_pmt/invoice_payments.amount_inv).round(2)
+```
+
+```python
+# Rougly 10% of payments are partial
+(invoice_payments.amount_pmt_pct.dropna()<1).mean()
+```
+
+
+
+
+    0.10207556638944651
 
 
 
 
 ```python
-invoice_payments_rollup = invoice_payments.groupby("invoice_id", 
-                                    as_index=False).agg({"amount_pmt":['sum','count'],
-                                                         "transaction_date":['min','max']})
+invoice_payments.amount_pmt_pct\
+.plot(kind="hist",bins=50, title="% of Invoice Collected with Payment", figsize=(12,4))
+```
+
+
+
+
+    <Axes: title={'center': '% of Invoice Collected with Payment'}, ylabel='Frequency'>
+
+
+
+
+
+![png](images/output_54_1.png)
+
+
+
+```python
+invoice_payments.sort_values(by=['invoice_id','transaction_date'], inplace=True)
+invoice_payments['pct_invoice_collected'] = invoice_payments.groupby("invoice_id").amount_pmt_pct.cumsum()
+```
+
+```python
+# negligible % of payments are overpayments - filter out
+(invoice_payments.pct_invoice_collected>1).mean()
+```
+
+
+
+
+    0.0008108537370326097
+
+
+
+
+```python
+invoice_payments_rollup = invoice_payments.query("pct_invoice_collected<=1")\
+.groupby("invoice_id", as_index=False)\
+.agg({"amount_pmt":['sum','count'],"transaction_date":['min','max'],"pct_invoice_collected":"max"})
 invoice_payments_rollup.columns = invoice_payments_rollup.columns.to_flat_index().map('_'.join)
 payment_totals = invoices.merge(invoice_payments_rollup, how="left", left_on="id", right_on="invoice_id_")
-payment_totals['amount_remaining'] = payment_totals.amount_inv - payment_totals.amount_pmt_sum
+payment_totals.pct_invoice_collected_max = payment_totals.pct_invoice_collected_max.fillna(0)
 ```
-#### Cleared invoices 
+#### Comparing invoice status and % collected 
 
-Invoices with cleared dates or statuses can still have amounts remaining. 1% of cleared invoices were overpaid.
+- Invoices with cleared status can still have amounts remaining. 
+- Invoices with open status are rarely collected. 
 
 
 ```python
-#For invoices with a cleared date, the totals do not match 10% of the time
-cleared_invoices = payment_totals.loc[payment_totals.cleared_date.isnull()==False].copy()
-1 - (cleared_invoices.amount_remaining==0).mean()
+# define invoice as collected if total payments meet invoice amount in original currencies. 92% are collected
+payment_totals['collected'] = payment_totals.pct_invoice_collected_max==1
+payment_totals.collected.mean()
 ```
 
 
 
 
-    0.10322323915638676
-
-
-
-
-```python
-#For invoices with "cleared" status, totals do not match 7% of the time
-cleared_invoices = payment_totals.loc[payment_totals.status=='CLEARED'].copy()
-1 - (cleared_invoices.amount_remaining==0).mean()
-```
-
-
-
-
-    0.07288219268252549
+    0.9172387557946141
 
 
 
 
 ```python
-# 1% of cleared invoices have been overpaid according to payments data. 
-(cleared_invoices.amount_remaining<0).mean()
+#define cleared based on status. 97% are cleared
+payment_totals['cleared'] = payment_totals.status=='CLEARED'
+payment_totals.cleared.mean()
 ```
 
 
 
 
-    0.010522755115101205
+    0.967373226228812
 
 
 
 
 ```python
-#only half of these seem to be late fees
-overpayments = cleared_invoices.query("amount_remaining<0")
-(overpayments.cleared_date>overpayments.due_date).mean()
+#5% of invoices have a mismatch between collected and cleared 
+(payment_totals.collected!=payment_totals.cleared).mean()
 ```
 
 
 
 
-    0.5716768027801912
+    0.05018755086874978
 
 
-
-#### Fully collected invoices
-
-- Can still be open (rarely). 
-- Almost always cleared with the last transaction, after converting to monthly periods. 
-- These may represent late fees. 
 
 
 ```python
-collected_invoices = payment_totals.query("amount_remaining==0").copy()
-collected_invoices.status.value_counts(normalize=True, dropna=False)
+#on average, cleared invoices are 95% collected, compared to <1% of open ones
+payment_totals.groupby("status", as_index=False)[['pct_invoice_collected_max','collected']].mean()
 ```
 
 
 
 
-    status
-    CLEARED    0.99998
-    OPEN       0.00002
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>status</th>
+      <th>pct_invoice_collected_max</th>
+      <th>collected</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>CLEARED</td>
+      <td>0.956600</td>
+      <td>0.948147</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>OPEN</td>
+      <td>0.006188</td>
+      <td>0.000813</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+
+```python
+#60% of invoices that have not been fully collected are cleared nonetheless. these won't be scored. 
+payment_totals.groupby("collected", as_index=False).cleared.mean()
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>collected</th>
+      <th>cleared</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>False</td>
+      <td>0.606093</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>True</td>
+      <td>0.999971</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+#### Cleared Invoices
+
+Cleared invoices may or may not be collected. If not collected, cleared invoices tend to be very late, suggesting that invoices must be cleared at some point.
+
+
+```python
+cleared_invoices = payment_totals.query("cleared == True").copy()
+cleared_invoices['months_late'] = \
+(cleared_invoices.transaction_date_max.fillna(last_transaction_date).dt.to_period('M')\
+- cleared_invoices.due_date.dt.to_period('M')).map(lambda m: m.n if not pandas.isnull(m) else None)
+```
+
+```python
+cleared_invoices.groupby("collected")[['months_allowed','months_late']].agg(['mean','min','max'])
+
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead tr th {
+        text-align: left;
+    }
+
+    .dataframe thead tr:last-of-type th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr>
+      <th></th>
+      <th colspan="3" halign="left">months_allowed</th>
+      <th colspan="3" halign="left">months_late</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>mean</th>
+      <th>min</th>
+      <th>max</th>
+      <th>mean</th>
+      <th>min</th>
+      <th>max</th>
+    </tr>
+    <tr>
+      <th>collected</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>False</th>
+      <td>1.612698</td>
+      <td>0</td>
+      <td>24</td>
+      <td>33.502646</td>
+      <td>-24</td>
+      <td>120</td>
+    </tr>
+    <tr>
+      <th>True</th>
+      <td>1.299562</td>
+      <td>0</td>
+      <td>24</td>
+      <td>0.585312</td>
+      <td>-36</td>
+      <td>24</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+#### Comparing date cleared to date collected
+
+There can be a delay between the date an invoice is collected to when it is cleared. We will only forecast invoices when they are open AND not collected. 
+
+
+```python
+payment_totals['collected_date'] = pandas.NaT
+payment_totals.loc[payment_totals.collected==1,'collected_date'] = \
+payment_totals.loc[payment_totals.collected==1,'transaction_date_max']
+payment_totals['clear_delay_months'] = (payment_totals.cleared_date.dt.to_period('M') \
+- payment_totals.collected_date.dt.to_period('M')).map(lambda m: m.n if not pandas.isnull(m) else None)
+```
+
+```python
+payment_totals.__len__()
+```
+
+
+
+
+    113036
+
+
+
+
+```python
+payment_totals.clear_delay_months.describe(percentiles=[0.01,0.99])
+```
+
+
+
+
+    count    103681.000000
+    mean          0.124883
+    std           1.404245
+    min           0.000000
+    1%            0.000000
+    50%           0.000000
+    99%           0.000000
+    max          36.000000
+    Name: clear_delay_months, dtype: float64
+
+
+
+# Structuring Data for Business Problem
+
+- The model will handle OPEN invoices and classify how many months in the future they will be collected. 
+- Define an invoice as open between its invoice date and date cleared or collected, whichever is first. 
+
+## Creating transaction periods to model historical invoices
+
+To model the data, we have to look the invoices in each prior period they were open and calculate when they are collected relative to that time. The periods we use for modeling must fall within the date range of the transactions data to ensure completeness.
+
+
+```python
+import numpy
+
+def forecast_periods(invoice_date, last_billing_date):
+    period_start = max(invoice_date,first_transaction_date.to_period('M'))
+    period_end = min(last_billing_date,last_transaction_date.to_period('M'))
+    return pandas.period_range(period_start, period_end)
+
+payment_totals['last_forecast_date'] = payment_totals[['cleared_date','collected_date']].min(axis=1)
+payment_totals['forecast_month'] = numpy.vectorize(forecast_periods)\
+(payment_totals.invoice_date.dt.to_period('M'), payment_totals.last_forecast_date.dt.to_period('M'))
+invoice_forecast_periods = payment_totals.explode('forecast_month').dropna(subset=['forecast_month'])
+invoice_forecast_periods.forecast_month.agg(['min','max'])
+```
+
+
+
+
+    min    2011-01
+    max    2021-01
+    Name: forecast_month, dtype: period[M]
+
+
+
+
+```python
+invoice_forecast_periods['imputed_collection_date'] = \
+invoice_forecast_periods.collected_date.fillna()
+```
+
+
+
+
+    Index(['id', 'due_date', 'invoice_date', 'status', 'amount_inv', 'currency',
+           'company_id', 'customer_id', 'account_id', 'cleared_date',
+           'root_exchange_rate_value', 'converted_amount', 'months_allowed',
+           'invoice_id_', 'amount_pmt_sum', 'amount_pmt_count',
+           'transaction_date_min', 'transaction_date_max',
+           'pct_invoice_collected_max', 'collected', 'cleared', 'collected_date',
+           'clear_delay_months', 'last_forecast_date', 'forecast_month'],
+          dtype='object')
+
+
+
+## Live test cases: current open invoices
+
+Invoices that we will predict after creating the model, without knowing the accuracy of the predictions. 
+Per the instructions, we only predict collection dates for open invoices. 
+
+
+```python
+open_invoices = invoices.query("status=='OPEN'").copy()
+open_invoices['forecast_month'] = open_invoices.cleared_date.dt.to_period('M')
+```
+
+```python
+open_invoices.forecast_month.agg(['min','max'])
+```
+
+
+
+
+    min    2022-01
+    max    2022-01
+    Name: forecast_month, dtype: period[M]
+
+
+
+## Process model inputs
+
+
+```python
+def process_model_inputs(input_df):
+    raw_input_columns = ['id','invoice_date', 'months_allowed','amount_inv', 'currency','company_id','customer_id',
+                            'forecast_month']
+    output_col = 'collected_date'
+    if output_col in input_df.columns:
+        raw_input_columns += [output_col, 'cleared_date']
+    output_df = input_df[raw_input_columns]
+    #only forecast when the invoice is active. 
+    output_df = output_df[input_df.forecast_month>=output_df.invoice_date.dt.to_period('M')]
+    output_df['months_billing'] = (output_df.forecast_month \
+                                  - output_df.invoice_date.dt.to_period('M')).map(lambda m: m.n)
+
+    output_df['months_late'] = output_df.months_billing - output_df.months_allowed
+    output_df['periods_billing'] = (output_df.months_billing/(output_df.months_allowed+1))
+    output_df['periods_late'] = (output_df.months_late/(output_df.months_allowed+1))
+    output_df.forecast_month = output_df.forecast_month.dt.to_timestamp()
+    return output_df
+
+open_invoices_to_score = process_model_inputs(open_invoices)
+invoices_periods_to_model = process_model_inputs(invoice_forecast_periods)
+```
+
+```python
+open_invoices_to_score.describe(include='all')
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>id</th>
+      <th>invoice_date</th>
+      <th>months_allowed</th>
+      <th>amount_inv</th>
+      <th>currency</th>
+      <th>company_id</th>
+      <th>customer_id</th>
+      <th>forecast_month</th>
+      <th>months_billing</th>
+      <th>months_late</th>
+      <th>periods_billing</th>
+      <th>periods_late</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>count</th>
+      <td>3688.000000</td>
+      <td>3688</td>
+      <td>3688.000000</td>
+      <td>3688.000000</td>
+      <td>3688</td>
+      <td>3688.000000</td>
+      <td>3688.000000</td>
+      <td>3688</td>
+      <td>3688.000000</td>
+      <td>3688.000000</td>
+      <td>3688.000000</td>
+      <td>3688.000000</td>
+    </tr>
+    <tr>
+      <th>unique</th>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>11</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>top</th>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>USD</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>freq</th>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>2895</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>mean</th>
+      <td>57103.281725</td>
+      <td>2021-01-03 17:26:49.815618048</td>
+      <td>0.143167</td>
+      <td>10013.671570</td>
+      <td>NaN</td>
+      <td>112.318872</td>
+      <td>925.635033</td>
+      <td>2022-01-01 00:00:00.000000256</td>
+      <td>12.299349</td>
+      <td>12.156182</td>
+      <td>12.038044</td>
+      <td>12.027032</td>
+    </tr>
+    <tr>
+      <th>min</th>
+      <td>12.000000</td>
+      <td>2019-01-03 00:09:00</td>
+      <td>0.000000</td>
+      <td>2.210771</td>
+      <td>NaN</td>
+      <td>14.000000</td>
+      <td>0.000000</td>
+      <td>2022-01-01 00:00:00</td>
+      <td>12.000000</td>
+      <td>0.000000</td>
+      <td>0.923077</td>
+      <td>0.000000</td>
+    </tr>
+    <tr>
+      <th>25%</th>
+      <td>29681.500000</td>
+      <td>2021-01-04 00:03:00</td>
+      <td>0.000000</td>
+      <td>5083.409585</td>
+      <td>NaN</td>
+      <td>114.000000</td>
+      <td>138.500000</td>
+      <td>2022-01-01 00:00:00</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+    </tr>
+    <tr>
+      <th>50%</th>
+      <td>57827.000000</td>
+      <td>2021-01-08 00:04:00</td>
+      <td>0.000000</td>
+      <td>9928.050159</td>
+      <td>NaN</td>
+      <td>114.000000</td>
+      <td>553.000000</td>
+      <td>2022-01-01 00:00:00</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+    </tr>
+    <tr>
+      <th>75%</th>
+      <td>84956.500000</td>
+      <td>2021-01-22 00:03:00</td>
+      <td>0.000000</td>
+      <td>15036.055574</td>
+      <td>NaN</td>
+      <td>114.000000</td>
+      <td>1346.000000</td>
+      <td>2022-01-01 00:00:00</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+      <td>12.000000</td>
+    </tr>
+    <tr>
+      <th>max</th>
+      <td>113070.000000</td>
+      <td>2021-01-31 00:03:00</td>
+      <td>12.000000</td>
+      <td>19989.653285</td>
+      <td>NaN</td>
+      <td>114.000000</td>
+      <td>5040.000000</td>
+      <td>2022-01-01 00:00:00</td>
+      <td>36.000000</td>
+      <td>36.000000</td>
+      <td>36.000000</td>
+      <td>36.000000</td>
+    </tr>
+    <tr>
+      <th>std</th>
+      <td>32463.430459</td>
+      <td>NaN</td>
+      <td>1.303061</td>
+      <td>5758.733690</td>
+      <td>NaN</td>
+      <td>12.858127</td>
+      <td>1048.136754</td>
+      <td>NaN</td>
+      <td>1.913049</td>
+      <td>1.443826</td>
+      <td>1.817753</td>
+      <td>1.881298</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+## Creating prediction target
+
+Predict months til collected relative to forecast date. Clip outliers to 12 months in the future.  
+
+
+```python
+#true values
+invoices_periods_to_model['months_til_collected'] = (invoices_periods_to_model.collected_date.dt.to_period('M') \
+                                                - invoices_periods_to_model.forecast_month.dt.to_period('M'))\
+.map(lambda m: m.n if not pandas.isnull(m) else None)
+```
+
+```python
+invoices_periods_to_model.months_til_collected.kurtosis()
+```
+
+
+
+
+    -0.822126175402508
+
+
+
+
+```python
+(invoices_periods_to_model.months_til_collected/(invoices_periods_to_model.months_allowed+1)).kurtosis()
+```
+
+
+
+
+    3.9232825290341626
+
+
+
+
+```python
+# why we clip outliers 
+invoices_periods_to_model.months_til_collected.value_counts(normalize=True)
+```
+
+
+
+
+    months_til_collected
+    0.0     0.344955
+    6.0     0.054314
+    12.0    0.054314
+    2.0     0.054314
+    3.0     0.054314
+    4.0     0.054314
+    5.0     0.054314
+    1.0     0.054314
+    7.0     0.054314
+    9.0     0.054314
+    10.0    0.054314
+    11.0    0.054314
+    8.0     0.054314
+    18.0    0.000273
+    14.0    0.000273
+    15.0    0.000273
+    16.0    0.000273
+    17.0    0.000273
+    21.0    0.000273
+    19.0    0.000273
+    20.0    0.000273
+    22.0    0.000273
+    23.0    0.000273
+    24.0    0.000273
+    13.0    0.000273
     Name: proportion, dtype: float64
 
 
 
 
 ```python
-(collected_invoices.cleared_date-collected_invoices.transaction_date_max).describe()
+invoices_periods_to_model.months_til_collected = invoices_periods_to_model.months_til_collected.clip(upper=12)
+```
+#### Handling historical invoices that were never fully collected
+
+- 8% of historical invoices & amounts never reached a collection state within the period. 
+- These tend to be more recent ones. 
+
+
+```python
+invoices_to_model = invoices_periods_to_model.sort_values(by=['id','forecast_month'])\
+.drop_duplicates(subset="id", keep="last").copy()
+invoices_to_model['collected'] = invoices_to_model.collected_date.isnull()==False
+```
+
+```python
+1 - invoices_to_model.collected.mean()
 ```
 
 
 
 
-    count                        101412
-    mean      3 days 17:20:24.789965684
-    std      42 days 12:41:59.168706657
-    min              -30 days +00:01:00
-    25%                 0 days 00:00:00
-    50%                 0 days 00:00:00
-    75%                 0 days 00:00:00
-    max              1112 days 23:55:00
-    dtype: object
+    0.08242390957729506
 
 
 
 
 ```python
-(collected_invoices.cleared_date.dt.to_period('M')<collected_invoices.transaction_date_max.dt.to_period('M'))\
-.mean()
+invoices_to_model.groupby("collected").amount_inv.sum()/invoices_to_model.amount_inv.sum()
+```
+
+
+
+
+    collected
+    False    0.081345
+    True     0.918655
+    Name: amount_inv, dtype: float64
+
+
+
+
+```python
+invoices_to_model.groupby("collected").months_billing.agg(['mean','min','max'])
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>mean</th>
+      <th>min</th>
+      <th>max</th>
+    </tr>
+    <tr>
+      <th>collected</th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>False</th>
+      <td>1.327028</td>
+      <td>0</td>
+      <td>36</td>
+    </tr>
+    <tr>
+      <th>True</th>
+      <td>1.898926</td>
+      <td>0</td>
+      <td>24</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+
+```python
+last_transaction_date + pandas.DateOffset(months=1)
+```
+
+
+
+
+    Timestamp('2021-02-28 00:03:00')
+
+
+
+
+```python
+def get_fake_collected_date(row):
+    if not pandas.isnull(row.collected_date):
+        return pandas.NaT
+    if 
 ```
 
 
@@ -1304,54 +2111,67 @@ collected_invoices.status.value_counts(normalize=True, dropna=False)
 
 
 ```python
-(collected_invoices.cleared_date.dt.to_period('M')>collected_invoices.transaction_date_max.dt.to_period('M'))\
-.mean()
+uncollected_invoices_to_model = \
+invoices_periods_to_model.loc[invoices_periods_to_model.months_til_collected.isnull()].copy()
+(uncollected_invoices_to_model.cleared_date > uncollected_invoices_to_model.forecast_month).mean()
+# uncollected_invoices_to_model['fake_collected_date'] = (uncollected_invoices_to_model.forecast_month \
+#                                                    + pandas.DateOffset(months=13))
+# (uncollected_invoices_to_model.collected_date,last_transaction_date + pandas.DateOffset(months=1))
+#they may have been collected outside of the transactions window
 ```
 
 
 
 
-    0.008815524789965685
+    1.0
 
 
-
-## Transforming Dates to Quantities
-
-
-```python
-invoice_time_allowed = invoices.due_date - invoices.invoice_date
-invoice_time_open = invoices.cleared_date - invoices.invoice_date
-invoice_time_late = invoice_time_open - invoice_time_allowed
-```
-
-```python
-invoices['days_allowed'] = invoice_time_allowed.map(lambda t: t.days if not pandas.isnull(t) else None)
-invoices['days_open'] = invoice_time_open.map(lambda t: t.days if not pandas.isnull(t) else None)
-invoices['days_late'] = invoice_time_late.map(lambda t: t.days if not pandas.isnull(t) else None)
-
-invoices['months_allowed'] = (invoices.due_date.dt.to_period('M') - invoices.invoice_date.dt.to_period('M'))
-invoices.months_allowed = invoices.months_allowed.map(lambda m: m.n if not pandas.isnull(m) else None)
-invoices['months_open'] = (invoices.cleared_date.dt.to_period('M') - invoices.invoice_date.dt.to_period('M'))
-invoices.months_open = invoices.months_open.map(lambda m: m.n if not pandas.isnull(m) else None)
-invoices['months_late'] = (invoices.cleared_date.dt.to_period('M') - invoices.due_date.dt.to_period('M'))
-invoices.months_late = invoices.months_late.map(lambda m: m.n if not pandas.isnull(m) else None)
-```
-## Break Down Invoices By Period
-
-Create periods from invoice date to close date
-Rolling payment window: due_date - current period
-Rolling days open: cleared_date - current period 
-
-## Assumptions
-
-- Invoices that are cleared will have their total amount paid off, no more, no less
-- Invoices will only be scored if they are open at that point in time 
-- 
 
 # Metadata Calculations & Cleaning
 
 Totals, Uniques, Averages, Ranges, Outliers, Missings
 Variables: Invoices, USD Amounts, Cleared/Open, Due Date, Invoice Date, Transaction Date, Customers, Companies, Accounts
+
+
+```python
+payments.query("invoice_id==24212")
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>amount</th>
+      <th>root_exchange_rate_value</th>
+      <th>transaction_date</th>
+      <th>invoice_id</th>
+      <th>company_id</th>
+      <th>converted_amount</th>
+    </tr>
+  </thead>
+  <tbody>
+  </tbody>
+</table>
+</div>
+
+
 
 # Notes
 
