@@ -57,8 +57,9 @@ def prepare_invoices(invoices: pandas.DataFrame, date_range: pandas.DatetimeInde
     exclude_invoices['Missing due date'] = invoices_prepared.loc[invoices_prepared.due_date.isnull()]
     exclude_invoices['Opened outside of Payment data time period'] = invoices_prepared.loc[
         (invoices_prepared.invoice_date > date_range.max()) | (invoices_prepared.invoice_date < date_range.min())]
-    exclude_invoices['Due before active'] = invoices_prepared.loc[invoices_prepared.months_allowed < 0]
-    exclude_invoices['Due over a year after opening '] = invoices_prepared.loc[invoices_prepared.months_allowed > 12]
+    exclude_invoices['Due before opened'] = invoices_prepared.loc[invoices_prepared.due_date <
+                                                                  invoices_prepared.invoice_date]
+    exclude_invoices['Due over 3 months after opened'] = invoices_prepared.loc[invoices_prepared.months_allowed > 3]
     return apply_filters(exclude_invoices, invoices_prepared)
 
 
@@ -89,7 +90,7 @@ def prepare_raw_inputs(invoices: pandas.DataFrame, payments: pandas.DataFrame):
 
 def test():
     data_folder = '../data_analysis/data'
-    date_format = '%Y-%M-%d'
+    date_format = '%Y-%m-%d'
     invoices = pandas.read_csv(data_folder + '/invoice.csv', na_values='inf',
                                parse_dates=['invoice_date', 'due_date', 'cleared_date'], date_format=date_format)
     payments = pandas.read_csv(data_folder + '/invoice_payments.csv', na_values='inf',
