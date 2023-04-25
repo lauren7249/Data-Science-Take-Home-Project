@@ -3,12 +3,14 @@ from collections import OrderedDict
 
 
 def months_between(start_date: pandas.Series, end_date: pandas.Series):
+    """ Calculate number of months between two dates in a pandas Dataframe """
     months = (end_date.dt.to_period('M') - start_date.dt.to_period('M'))
     months = months.map(lambda m: m.n if not pandas.isnull(m) else None)
     return months
 
 
 def apply_filters(filters: OrderedDict, apply_to_df: pandas.DataFrame):
+    """ Perform sequential filter steps on a pandas Dataframe and report impact on the input data """
     filter_stats = pandas.DataFrame(columns=['Bad Data', '% of Unfiltered Data', 'Rows Filter Applied To',
                                              '% Filtered at Step'])
     filtered_data = apply_to_df.copy()
@@ -26,6 +28,7 @@ def apply_filters(filters: OrderedDict, apply_to_df: pandas.DataFrame):
 
 
 def prepare_payments(payments: pandas.DataFrame):
+    """ Validate and filter payments data """
     assert payments.invoice_id.count() == payments.__len__(), 'Missing invoice ids'
     assert payments.transaction_date.count() == payments.__len__(), 'Missing transaction dates'
     assert payments.root_exchange_rate_value.count() == payments.__len__(), 'Missing exchange rates'
@@ -40,6 +43,7 @@ def prepare_payments(payments: pandas.DataFrame):
 
 
 def prepare_invoices(invoices: pandas.DataFrame, date_range: pandas.DatetimeIndex):
+    """ Validate and filter invoices data. Date_range is applied to the invoice month. """
     assert invoices.id.count() == invoices.__len__(), 'Missing IDs'
     assert invoices.invoice_date.count() == invoices.__len__(), 'Missing invoice dates'
     assert invoices.status.count() == invoices.__len__(), 'Missing statuses'
@@ -68,33 +72,24 @@ def prepare_invoices(invoices: pandas.DataFrame, date_range: pandas.DatetimeInde
     return apply_filters(exclude_invoices, invoices_prepared)
 
 
-def prepare_raw_inputs(invoices: pandas.DataFrame, payments: pandas.DataFrame):
-    """ Takes in invoices and payments and prepares them to be scored at a point in time. Can be open or closed when
-     scored. Closed invoices would be used for model training. """
-    payments_prepared, payment_filter_stats = prepare_payments(payments)
-    payments_date_range = pandas.date_range(start=payments_prepared.transaction_month.min(),
-                                            end=payments_prepared.transaction_month.max(), periods=2)
-    invoices_prepared, invoice_filter_stats = prepare_invoices(invoices, payments_date_range)
-
-    consolidated_data = invoices_prepared.merge(payments_prepared, on="invoice_id", suffixes=('_inv', '_pmt'),
-                                                how='outer')
+def prepare_consolidated_cash_data(consolidated_data: pandas.DataFrame):
+    """ Validate and filter consolidated cash data """
     exclude_consolidation = OrderedDict({
-        'Missing invoice data': consolidated_data.loc[consolidated_data.status.isnull()],
+        'Missing invoice data': consolidated_data.loc[consolidated_data.amount_inv.isnull()],
         'Due before October 2011': consolidated_data.loc[consolidated_data.due_month < '2011-10-01']
         })
     consolidated_data, consolidated_filter_stats = apply_filters(exclude_consolidation, consolidated_data)
-    filter_stats = pandas.concat(
-        {"invoices": invoice_filter_stats, "payments": payment_filter_stats, "consolidated": consolidated_filter_stats}
-    )
-    filter_stats.index.set_names(['Dataset', 'Step Number'], inplace=True)
 
     assert consolidated_data.loc[consolidated_data.amount_pmt > consolidated_data.amount_inv].__len__() == 0, \
         'Payment amount > invoice'
     assert consolidated_data.loc[consolidated_data.amount_pmt < 0].__len__() == 0, 'Negative payment amount'
+    consolidated_data = feature_engineering(consolidated_data)
+    return consolidated_data, consolidated_filter_stats
 
+
+def feature_engineering(consolidated_data: pandas.DataFrame):
     consolidated_data.sort_values(by=['invoice_id', 'transaction_date'], inplace=True)
     consolidated_data.drop_duplicates(subset='invoice_id', keep='last')
-    consolidated_data.transaction_month = consolidated_data.transaction_month.fillna(payments_date_range[-1])
     #normalize by company
     consolidated_data['converted_amount_inv'] = (consolidated_data.amount_inv *
                                                  consolidated_data.root_exchange_rate_value_inv)
@@ -112,7 +107,28 @@ def prepare_raw_inputs(invoices: pandas.DataFrame, payments: pandas.DataFrame):
     ).map(lambda m: m.n+1).clip(upper=13, lower=1)
     consolidated_data['due_per_month'] = 1 / consolidated_data.month_due
     consolidated_data.forecast_month = consolidated_data.forecast_month.dt.to_timestamp()
+    return consolidated_data
 
+
+def prepare_raw_inputs(invoices: pandas.DataFrame, payments: pandas.DataFrame):
+    """ Takes in invoices and payments and prepares them to be scored at a point in time. Can be open or closed when
+     scored. Closed invoices would be used for model training. """
+    # validate and filter input datasets
+    payments_prepared, payment_filter_stats = prepare_payments(payments)
+    payments_date_range = pandas.date_range(start=payments_prepared.transaction_month.min(),
+                                            end=payments_prepared.transaction_month.max(), periods=2)
+    invoices_prepared, invoice_filter_stats = prepare_invoices(invoices, payments_date_range)
+    # consolidate invoices with payments
+    consolidated_data = invoices_prepared.merge(payments_prepared, on="invoice_id", suffixes=('_inv', '_pmt'),
+                                                how='outer')
+    # invoices with no transactions: use payments data end date as date of 0 amount
+    consolidated_data.transaction_month = consolidated_data.transaction_month.fillna(payments_date_range[-1])
+    # filter and validate consolidated data
+    consolidated_data, consolidated_filter_stats = prepare_consolidated_cash_data(consolidated_data)
+    filter_stats = pandas.concat(
+        {"invoices": invoice_filter_stats, "payments": payment_filter_stats, "consolidated": consolidated_filter_stats}
+    )
+    filter_stats.index.set_names(['Dataset', 'Step Number'], inplace=True)
     return consolidated_data, filter_stats
 
 
@@ -127,8 +143,7 @@ def test():
     consolidated_data, filter_stats = prepare_raw_inputs(invoices, payments)
     print(filter_stats)
     print(consolidated_data.columns)
-    #assert list(consolidated_data.status.unique()) == ['CLEARED']
-
+    print(consolidated_data.shape)
 
 if __name__ == "__main__":
     test()
