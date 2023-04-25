@@ -34,6 +34,7 @@ def prepare_payments(payments: pandas.DataFrame):
     assert (payments.amount.isnull() == payments.converted_amount.isnull()).min() == 1, \
         'Converted amounts populated inconsistently from amounts'
     payments_prepared = payments.drop(columns=['company_id', 'converted_amount'], errors='ignore')
+    payments_prepared['transaction_month'] = payments_prepared.transaction_date.dt.to_period('M').dt.to_timestamp()
     exclude_payments = OrderedDict({'Missing Amount': payments_prepared.loc[payments_prepared.amount.isnull()]})
     return apply_filters(exclude_payments, payments_prepared)
 
@@ -52,14 +53,18 @@ def prepare_invoices(invoices: pandas.DataFrame, date_range: pandas.DatetimeInde
 
     invoices_prepared = invoices.rename(columns={"id": "invoice_id", "amount_inv": "amount"})
     invoices_prepared.drop(columns=['account_id'], inplace=True, errors='ignore')
-    invoices_prepared['months_allowed'] = months_between(invoices_prepared.invoice_date, invoices_prepared.due_date)
+    invoices_prepared['invoice_month'] = invoices_prepared.invoice_date.dt.to_period('M').dt.to_timestamp()
+    invoices_prepared['due_month'] = invoices_prepared.due_date.dt.to_period('M').dt.to_timestamp()
+    invoices_prepared['months_allowed'] = months_between(invoices_prepared.invoice_month, invoices_prepared.due_month)
     exclude_invoices = OrderedDict()
     exclude_invoices['Missing due date'] = invoices_prepared.loc[invoices_prepared.due_date.isnull()]
     exclude_invoices['Opened outside of Payment data time period'] = invoices_prepared.loc[
-        (invoices_prepared.invoice_date > date_range.max()) | (invoices_prepared.invoice_date < date_range.min())]
-    exclude_invoices['Due before opened'] = invoices_prepared.loc[invoices_prepared.due_date <
-                                                                  invoices_prepared.invoice_date]
+        (invoices_prepared.invoice_month > date_range.max()) | (invoices_prepared.invoice_month < date_range.min())]
+    exclude_invoices['Due before opened'] = invoices_prepared.loc[invoices_prepared.due_month <
+                                                                  invoices_prepared.invoice_month]
     exclude_invoices['Due over 3 months after opened'] = invoices_prepared.loc[invoices_prepared.months_allowed > 3]
+    exclude_invoices['Forecast month < invoice month'] = invoices_prepared.loc[
+        invoices_prepared.forecast_month < invoices_prepared.invoice_month.dt.to_period('M')]
     return apply_filters(exclude_invoices, invoices_prepared)
 
 
@@ -67,24 +72,47 @@ def prepare_raw_inputs(invoices: pandas.DataFrame, payments: pandas.DataFrame):
     """ Takes in invoices and payments and prepares them to be scored at a point in time. Can be open or closed when
      scored. Closed invoices would be used for model training. """
     payments_prepared, payment_filter_stats = prepare_payments(payments)
-    payments_date_range = pandas.date_range(start=payments.transaction_date.min(), end=payments.transaction_date.max(),
-                                            periods=2)
+    payments_date_range = pandas.date_range(start=payments_prepared.transaction_month.min(),
+                                            end=payments_prepared.transaction_month.max(), periods=2)
     invoices_prepared, invoice_filter_stats = prepare_invoices(invoices, payments_date_range)
 
-    consolidated_data = payments_prepared.merge(invoices_prepared, on="invoice_id", suffixes=('_pmt', '_inv'),
+    consolidated_data = invoices_prepared.merge(payments_prepared, on="invoice_id", suffixes=('_inv', '_pmt'),
                                                 how='outer')
     exclude_consolidation = OrderedDict({
         'Missing invoice data': consolidated_data.loc[consolidated_data.status.isnull()],
+        'Due before October 2011': consolidated_data.loc[consolidated_data.due_month < '2011-10-01']
         })
     consolidated_data, consolidated_filter_stats = apply_filters(exclude_consolidation, consolidated_data)
-    assert consolidated_data.loc[consolidated_data.amount_pmt > consolidated_data.amount_inv].__len__() == 0, \
-        'Payment amount > invoice'
-    assert consolidated_data.loc[consolidated_data.amount_pmt < 0].__len__() == 0, 'Negative payment amount'
-
     filter_stats = pandas.concat(
         {"invoices": invoice_filter_stats, "payments": payment_filter_stats, "consolidated": consolidated_filter_stats}
     )
     filter_stats.index.set_names(['Dataset', 'Step Number'], inplace=True)
+
+    assert consolidated_data.loc[consolidated_data.amount_pmt > consolidated_data.amount_inv].__len__() == 0, \
+        'Payment amount > invoice'
+    assert consolidated_data.loc[consolidated_data.amount_pmt < 0].__len__() == 0, 'Negative payment amount'
+
+    consolidated_data.sort_values(by=['invoice_id', 'transaction_date'], inplace=True)
+    consolidated_data.drop_duplicates(subset='invoice_id', keep='last')
+    consolidated_data.transaction_month = consolidated_data.transaction_month.fillna(payments_date_range[-1])
+    #normalize by company
+    consolidated_data['converted_amount_inv'] = (consolidated_data.amount_inv *
+                                                 consolidated_data.root_exchange_rate_value_inv)
+    totals_by_company = consolidated_data.groupby("company_id", as_index=False).converted_amount_inv.sum()
+    consolidated_data = consolidated_data.merge(totals_by_company,on="company_id", suffixes=('', '_company'))
+    inv_pct_of_company_total = consolidated_data.converted_amount_inv/consolidated_data.converted_amount_inv_company
+    consolidated_data['inv_pct_of_company_total'] = inv_pct_of_company_total
+    consolidated_data.drop(columns=["converted_amount_inv", "cleared_date"], inplace=True, errors='ignore')
+    #date quantities
+    consolidated_data['month_billing'] = (
+            consolidated_data.forecast_month - consolidated_data.invoice_month.dt.to_period('M')
+    ).map(lambda m: m.n+1).clip(upper=13, lower=1)
+    consolidated_data['month_due'] = (
+            consolidated_data.due_month.dt.to_period('M') - consolidated_data.forecast_month
+    ).map(lambda m: m.n+1).clip(upper=13, lower=1)
+    consolidated_data['due_per_month'] = 1 / consolidated_data.month_due
+    consolidated_data.forecast_month = consolidated_data.forecast_month.dt.to_timestamp()
+
     return consolidated_data, filter_stats
 
 
@@ -95,7 +123,7 @@ def test():
                                parse_dates=['invoice_date', 'due_date', 'cleared_date'], date_format=date_format)
     payments = pandas.read_csv(data_folder + '/invoice_payments.csv', na_values='inf',
                                parse_dates=['transaction_date'], date_format=date_format)
-
+    invoices['forecast_month'] = invoices.cleared_date.dt.to_period('M')
     consolidated_data, filter_stats = prepare_raw_inputs(invoices, payments)
     print(filter_stats)
     print(consolidated_data.columns)
