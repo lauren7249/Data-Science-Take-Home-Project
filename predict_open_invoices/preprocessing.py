@@ -137,9 +137,12 @@ def test():
     date_format = '%Y-%m-%d'
     invoices = pandas.read_csv(data_folder + '/invoice.csv', na_values='inf',
                                parse_dates=['invoice_date', 'due_date', 'cleared_date'], date_format=date_format)
+    assert invoices.__len__() == 113085, "Test invoices data has been modified. Future checks will not be valid"
     payments = pandas.read_csv(data_folder + '/invoice_payments.csv', na_values='inf',
                                parse_dates=['transaction_date'], date_format=date_format)
-    invoices['forecast_month'] = invoices.cleared_date.dt.to_period('M')
+    assert payments.__len__() == 111623, "Test payments data has been modified. Future checks will not be valid"
+    # test using the invoice date as the point in time to generate a forecast.
+    invoices['forecast_month'] = invoices.invoice_date.dt.to_period('M')
     consolidated_data, filter_stats = prepare_raw_inputs(invoices, payments)
     print(filter_stats)
     print(consolidated_data.columns)
