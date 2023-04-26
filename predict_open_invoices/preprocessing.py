@@ -144,6 +144,8 @@ def test():
     # test using the invoice date as the point in time to generate a forecast.
     invoices['forecast_month'] = invoices.invoice_date.dt.to_period('M')
     consolidated_data, filter_stats = prepare_raw_inputs(invoices, payments)
+    # data is sorted by invoice and transaction date.
+    consolidated_data.drop_duplicates(subset=['invoice_id', 'forecast_month'], inplace=True, keep='last')
     print(filter_stats)
     print(consolidated_data.columns)
     print(consolidated_data.shape)
