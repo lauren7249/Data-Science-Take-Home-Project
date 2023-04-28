@@ -7,7 +7,7 @@ tldr: A machine learning project is only as good as the data that goes into it. 
   are some of the high level aspects of the data that we can discover? How should
   we clean and filter the data?
 tags: []
-updated_at: 2023-04-27 19:41:28.849319
+updated_at: 2023-04-27 21:07:53.590410
 thumbnail: images/output_20_1.png
 ---
 
@@ -1428,15 +1428,14 @@ invoice_payments = invoice_payments.drop(columns=['company_id_pmt'])\
 ## Establish Business Rules
 
 - Payments are collected based on the invoice currency.
-- Payments cannot be more than what is owed.
-    - Ignore payments that exceed amount remaining.
-- Payments can be less than what is owed.
+- Payments cannot be more than what is owed: ignore payments that exceed amount remaining.
+- Payments can be less than what is owed:
     - Payments can be a negligible % of the invoice, but are always non-zero.
     - Consider an invoice "collected" when paid > 99.99%.
-- Once collected, an invoice is cleared 
+- Once collected, an invoice is cleared:
     - Invoices can be cleared prematurely without being collected. 
     - When an invoice is cleared prematurely, it won't be collected.
-- Regardless of status, invoices can have no payments. 
+- Regardless of status, invoices can have zero payments. 
 
 
 ```python
@@ -1664,11 +1663,10 @@ invoice_end_state.loc[invoice_end_state.status=='CLEARED',['collected','amount_p
     - End forecast window when invoice is collected. 
     - For open invoices to be included in model training, end the forecast window when payments data ends. 
 
-Normalizing by company:
-- Tesorio's pricing model is subscription, so Tesorio's revenue will be loosely based on paying customers per period. 
-- Normalizing USD amounts by company means each company will be of equal value each month they retain with Tesorio, regardless of their total cash flow. 
 
-
+- Normalizing by company:
+    - Tesorio's pricing model is subscription, so Tesorio's revenue will be loosely based on paying customers per period. 
+    - Normalizing USD amounts by company means each company will be of equal value each month they retain with Tesorio, regardless of their total cash flow. 
 
 
 ```python
@@ -2047,23 +2045,6 @@ invoices_to_model.drop(columns=['status']).describe(include='all', percentiles=[
 
 
 ```python
-# The target is month collected relative to forecast, scaled 1-13.
-# - 1 = collected the same month
-# - 13 = beyond the forecast window of 12 months 
-
-# Scaling steps:
-# - If the invoice isn't collected within the payments data time period, assume it's collected the day after, which we are using as the present date. 
-# - Clip collection period to 13 months.
-# - Calculate collection month.
-# - Invert to create % collected per billing period.
-# invoices_to_model['month_collected'] = (invoices_to_model.collected_month.dt.to_period('M')
-#     - invoices_to_model.forecast_month.dt.to_period('M'))\
-# .map(lambda m: int(m.n+1) if not pandas.isnull(m) else None).clip(upper=13)
-# invoices_to_model.month_collected.plot(kind='hist', bins=14, figsize=figsize, 
-# title="Month Collected Relative to Forecast Date", density=True)
-```
-
-```python
 invoices_to_model.collected_per_month\
 .plot(kind='hist', bins=14, figsize=figsize, title="Average % Collected Per Month")
 ```
@@ -2077,7 +2058,7 @@ invoices_to_model.collected_per_month\
 
 
 
-![png](images/output_84_1.png)
+![png](images/output_83_1.png)
 
 
 
@@ -2095,7 +2076,7 @@ invoices_to_model.due_per_month\
 
 
 
-![png](images/output_85_1.png)
+![png](images/output_84_1.png)
 
 
 
@@ -2119,7 +2100,7 @@ invoices_to_model.groupby("forecast_month").invoice_id.count()\
 
 
 
-![png](images/output_88_1.png)
+![png](images/output_87_1.png)
 
 
 
@@ -2137,7 +2118,7 @@ invoices_to_model.groupby("invoice_month").invoice_id.count()\
 
 
 
-![png](images/output_89_1.png)
+![png](images/output_88_1.png)
 
 
 
@@ -2155,7 +2136,7 @@ invoices_to_model.groupby("due_month").invoice_id.count()\
 
 
 
-![png](images/output_90_1.png)
+![png](images/output_89_1.png)
 
 
 ***Trends in Variable to Be Modeled***
@@ -2177,7 +2158,7 @@ invoices_to_model.groupby("due_month")[['collected_per_month','due_per_month']].
 
 
 
-![png](images/output_92_1.png)
+![png](images/output_91_1.png)
 
 
 
@@ -2195,7 +2176,7 @@ invoices_to_model.groupby("due_month").uncollected.mean()\
 
 
 
-![png](images/output_93_1.png)
+![png](images/output_92_1.png)
 
 
 ***By Currency***
@@ -2410,7 +2391,7 @@ customer_averages.hist(bins=50, figsize=(10,14), layout=(4,3))
 
 
 
-![png](images/output_97_1.png)
+![png](images/output_96_1.png)
 
 
 
@@ -2430,7 +2411,7 @@ customer_stats.query("uncollected_count>=30").uncollected_mean\
 
 
 
-![png](images/output_98_1.png)
+![png](images/output_97_1.png)
 
 
 
@@ -2451,7 +2432,7 @@ western_customer_stats.query("uncollected_count>=30").uncollected_mean\
 
 
 
-![png](images/output_99_1.png)
+![png](images/output_98_1.png)
 
 
 # Business Analysis
@@ -2490,7 +2471,7 @@ business_motivation.pct_unpaid.plot(figsize=figsize, title="% Unpaid (USD Due)")
 
 
 
-![png](images/output_103_1.png)
+![png](images/output_102_1.png)
 
 
 
@@ -2533,7 +2514,7 @@ invoices_to_model.query("due_month<'2011-10-01'").__len__()
 
 Companies will be more likely to retain if their monthly forecast error is low as a percentage of their total cash flow.
 
-As a benchmark, we use due date in place of the forecast, filtering out the first few months, which have abnormally high errors rates. Weighting companies equally, on average, a company's monthly cash flow is 24% off from their cash due.
+As a benchmark, we use due date in place of the forecast, filtering out the first few invoice months, which have abnormally high errors rates. Weighting companies equally, on average, a company's monthly cash flow is 9.7% off from their cash due.
 
 
 ```python
@@ -2555,19 +2536,97 @@ invoices_to_model.__len__(), invoices_to_model.inv_pct_of_company_total.sum()
 
 ```python
 from sklearn.metrics import mean_absolute_error
-mean_absolute_error(invoices_to_model.collected_per_month, invoices_to_model.due_per_month, 
-                    sample_weight=invoices_to_model.inv_pct_of_company_total)
+#enables time-based split
+invoices_to_model['forecast_date_fold']=(invoices_to_model.forecast_month.rank(pct=True)*6).round()
+```
+
+```python
+benchmark = invoices_to_model.query("forecast_date_fold>4")\
+[['due_per_month','collected_per_month','inv_pct_of_company_total']].copy()
+benchmark['month_collected'] = (1/benchmark.collected_per_month).replace(numpy.inf,numpy.nan).round(0)
+benchmark['month_due'] = (1/benchmark.due_per_month).replace(numpy.inf,None).round(0)
+benchmark = benchmark.groupby("month_due", as_index=False).inv_pct_of_company_total.sum()\
+.merge(
+    benchmark.groupby("month_collected", as_index=False).inv_pct_of_company_total.sum().rename(
+        columns={"month_collected":"month_due"}
+    ), on="month_due", suffixes=('_due','')
+)
+benchmark
 ```
 
 
 
 
-    0.23557764147172755
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>month_due</th>
+      <th>inv_pct_of_company_total_due</th>
+      <th>inv_pct_of_company_total</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>1.0000</td>
+      <td>0.1866</td>
+      <td>0.1679</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>2.0000</td>
+      <td>0.1678</td>
+      <td>0.1126</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>3.0000</td>
+      <td>0.0368</td>
+      <td>0.0354</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>4.0000</td>
+      <td>0.0041</td>
+      <td>0.0099</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+
+```python
+benchmark_pct_diff = mean_absolute_error(benchmark.inv_pct_of_company_total, benchmark.inv_pct_of_company_total_due)
+benchmark_pct_diff
+```
+
+
+
+
+    0.020231923717956988
 
 
 
 ## Demonstrate Minimum Potential Impact of ML 
-Turning this into an ML task without any additional feature engineering, a company's average % difference from cash flow forecasted is reduced to 20%.
+
+Turning this into an ML task without any additional feature engineering, a company's average % difference from cash flow forecasted is 
 
 
 ```python
@@ -2671,9 +2730,7 @@ h2o.init(
 
 
 ```python
-#enables time-based split
-invoices_to_model['forecast_date_fold']=(invoices_to_model.forecast_month.rank(pct=True)*6).round()
-#invoice weight is based on the company-adjusted amount. unit is number of rows
+#invoice weight is based on the company-adjusted amount. unit is number of rows for related ML parameters
 invoices_to_model['inv_company_weight'] = invoices_to_model.inv_pct_of_company_total*invoices_to_model.invoice_id.nunique()\
 /invoices_to_model.company_id.nunique()
 invoices_to_model.inv_company_weight.sum(), invoices_to_model.__len__()
@@ -2705,30 +2762,25 @@ valid = invoices_to_model_h2o[invoices_to_model_h2o['forecast_date_fold'] > 4]
 ```
 
 ```python
-    columns_to_model = ['invoice_id','invoice_month','forecast_month','due_month','months_allowed',
-                         'amount_inv','converted_amount_inv', 'currency','company_id','customer_id',
-                         'collected_month','prior_remaining_inv_pct','final_remaining_inv_pct',
-                         'months_to_final_state','collected_per_month', 'status']
-```
-
-```python
 y_numeric='collected_per_month'
-x = ['months_allowed','amount_inv','inv_pct_of_company_total','currency','month_billing','due_per_month']
+x = ['months_allowed','amount_inv','inv_pct_of_company_total','currency','months_open','due_per_month',
+     'prior_remaining_inv_pct']
 #huber is a bi-modal distribution
 #hyperparameter tuning is addressed by using AutoML and specifying sort and stopping metrics. 
 #train, blend, and validation dataframes are binned sequentially by forecast month
 #this enforces the time-based split during hyperparameter tuning. 
-aml = H2OAutoML(max_runtime_secs=60, distribution='huber', sort_metric='mae', stopping_metric='mae', stopping_tolerance=0.01)
+aml = H2OAutoML(max_runtime_secs=60, distribution='huber', sort_metric='mae', stopping_metric='mae',
+                stopping_tolerance=0.01)
 aml_model = aml.train(x=x , y=y_numeric, training_frame=train, blending_frame=blend, validation_frame=valid, 
                       weights_column='inv_company_weight') 
 ```
     AutoML progress: |
-    19:58:45.171: User specified a validation frame with cross-validation still enabled. Please note that the models will still be validated using cross-validation only, the validation frame will be used to provide purely informative validation metrics on the trained models.
+    20:04:07.150: User specified a validation frame with cross-validation still enabled. Please note that the models will still be validated using cross-validation only, the validation frame will be used to provide purely informative validation metrics on the trained models.
     
-    █████████████████████████████████████████████
-    19:59:29.46: _weights_column param, All base models use weights_column="inv_company_weight" but Stacked Ensemble does not. If you want to use the same weights_column for the meta learner, please specify it as an argument in the h2o.stackedEnsemble call.
+    ███████████████████████████████████████████████
+    20:04:53.13: _weights_column param, All base models use weights_column="inv_company_weight" but Stacked Ensemble does not. If you want to use the same weights_column for the meta learner, please specify it as an argument in the h2o.stackedEnsemble call.
     
-    ██████████████████| (done) 100%
+    ████████████████| (done) 100%
 
 
 
@@ -2739,7 +2791,7 @@ aml_model.mae(),aml_model.mae(valid=True)
 
 
 
-    (0.20105163844594623, 0.18582310521108092)
+    (0.19200713688347956, 0.23105778352057826)
 
 
 
@@ -2751,4 +2803,113 @@ aml_model.r2(),aml_model.r2(valid=True)
 
 
 
-    (0.29938663639830765, 0.35026110020380696)
+    (0.3467479024441159, 0.29391459646424967)
+
+
+
+
+```python
+validation_results = valid[[y_numeric,'inv_pct_of_company_total']].cbind(aml_model.predict(valid)).as_data_frame()
+validation_results.rename(columns={"predict":"predict_collected_per_month"}, inplace=True)
+validation_results['month_collected'] = (1/validation_results.collected_per_month)\
+.replace(numpy.inf,numpy.nan).round(0)
+validation_results['predict_month_collected'] = (1/validation_results.predict_collected_per_month)\
+.replace(numpy.inf,None).round(0)
+validation_results = validation_results.groupby("predict_month_collected", as_index=False).inv_pct_of_company_total.sum()\
+.merge(
+    validation_results.groupby("month_collected", as_index=False).inv_pct_of_company_total.sum().rename(
+        columns={"month_collected":"predict_month_collected"}
+    ), on="predict_month_collected", suffixes=('_predict','')
+)
+validation_results
+```
+    stackedensemble prediction progress: |███████████████████████████████████████████| (done) 100%
+
+
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>predict_month_collected</th>
+      <th>inv_pct_of_company_total_predict</th>
+      <th>inv_pct_of_company_total</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>1.0000</td>
+      <td>0.1967</td>
+      <td>0.1679</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>2.0000</td>
+      <td>0.1740</td>
+      <td>0.1126</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>3.0000</td>
+      <td>0.0220</td>
+      <td>0.0354</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>4.0000</td>
+      <td>0.0020</td>
+      <td>0.0099</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>5.0000</td>
+      <td>0.0005</td>
+      <td>0.0029</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+
+```python
+ml_pct_diff = mean_absolute_error(validation_results.inv_pct_of_company_total, 
+                                  validation_results.inv_pct_of_company_total_predict)
+ml_pct_diff
+```
+
+
+
+
+    0.022780620135095943
+
+
+
+
+```python
+ml_pct_diff/benchmark_pct_diff - 1
+```
+
+
+
+
+    0.12597400290101146
