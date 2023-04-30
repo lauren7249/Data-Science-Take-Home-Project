@@ -7,7 +7,7 @@ tldr: A machine learning project is only as good as the data that goes into it. 
   are some of the high level aspects of the data that we can discover? How should
   we clean and filter the data?
 tags: []
-updated_at: 2023-04-27 21:07:53.590410
+updated_at: 2023-04-28 13:48:14.701260
 thumbnail: images/output_20_1.png
 ---
 
@@ -44,6 +44,7 @@ invoices.__len__(), payments.__len__()
 ***Define Datasets & Their Relationships***
 
 We have two input datasets: invoices and their payments.
+
 - Payments are amounts in time, which are directly mapped to companies. 
 - Invoices can have multiple payments, but usually only have 1. 
 - All payments have invoices, but not all invoices have payments.  
