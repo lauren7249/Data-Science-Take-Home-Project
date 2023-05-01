@@ -1,0 +1,1 @@
+ID_COLUMNS = ["id", "company_id", "invoice_id", "account_id", "customer_id"]

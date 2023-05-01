@@ -7,7 +7,7 @@ tldr: A machine learning project is only as good as the data that goes into it. 
   are some of the high level aspects of the data that we can discover? How should
   we clean and filter the data?
 tags: []
-updated_at: 2023-04-28 13:48:14.701260
+updated_at: 2023-04-30 23:19:03.434451
 thumbnail: images/output_20_1.png
 ---
 
@@ -502,7 +502,7 @@ invoices.groupby("account_id").company_id.nunique().value_counts()\
 
 ***Payments***
 
-Transaction data begins in 2011 and ends 2021-05-18. We will assume this is when the data was pulled. The last month looks incomplete, so we filter it out. 
+Transaction data begins in 2011 and ends 2021-05-18. We will assume this is when the data was pulled. Based on volume, the last month appears to have an unrepresentative set of payments, so we filter out those payments. 
 
 
 ```python
@@ -531,6 +531,14 @@ last_complete_transaction_month = payments.transaction_month.max()
 first_transaction_month = payments.transaction_month.min()
 first_transaction_month, last_complete_transaction_month
 ```
+
+
+
+
+    (Timestamp('2011-04-01 00:00:00'), Timestamp('2021-04-01 00:00:00'))
+
+
+
 
 ```python
 #converted_amount is reliable
@@ -774,12 +782,7 @@ invoices.loc[invoices.invoice_month<first_transaction_month].__len__())
 invoices = invoices.loc[(invoices.invoice_month<=invoices.due_date.dt.to_period('M').dt.to_timestamp()) &
                         (invoices.invoice_month>=first_transaction_month)]
 ```
-
-
-
-
-    (14, 58)
-
+    14 58
 
 
 
@@ -1775,7 +1778,7 @@ def process_model_inputs(invoice_payments, current_state_month=None):
                                                     .map(lambda m: m.n+1 if not pandas.isnull(m) else None)
     invoices_to_score.forecast_month = invoices_to_score.forecast_month.dt.to_timestamp()
     # late invoices should not impact the % of the invoice due per month.   
-    invoices_to_model['due_per_month'] = 1/invoices_to_model.month_due.clip(lower=1)
+    invoices_to_score['due_per_month'] = 1/invoices_to_score.month_due.clip(lower=1)
     return invoices_to_score
 
 invoices_to_model = process_model_inputs(invoice_payments)
@@ -1846,7 +1849,7 @@ invoices_to_model.month_due.plot(kind='hist', bins=14, figsize=figsize,
 # invoices due in the future have low collection velocity. 
 # need to be mindful of how this will impact trends
 print((invoices_to_model.due_month>last_complete_transaction_month).mean())
-invoices_to_model = invoices_to_model[invoices_to_model.due_month<=last_complete_transaction_month]
+#invoices_to_model = invoices_to_model[invoices_to_model.due_month<=last_complete_transaction_month]
 ```
     0.02279394561128809
 
@@ -2627,7 +2630,7 @@ benchmark_pct_diff
 
 ## Demonstrate Minimum Potential Impact of ML 
 
-Turning this into an ML task without any additional feature engineering, a company's average % difference from cash flow forecasted is 
+Turning this into an ML task without any additional feature engineering, a company's average % difference from cash flow forecasted is 27% lower than the benchmark. 
 
 
 ```python
@@ -2643,9 +2646,9 @@ h2o.init(
     Attempting to start a local H2O server...
       Java Version: java version "1.8.0_65"; Java(TM) SE Runtime Environment (build 1.8.0_65-b17); Java HotSpot(TM) 64-Bit Server VM (build 25.65-b01, mixed mode)
       Starting server from /usr/local/lib/python3.11/site-packages/h2o/backend/bin/h2o.jar
-      Ice root: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmps9bzko9i
-      JVM stdout: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmps9bzko9i/h2o_lauren_started_from_python.out
-      JVM stderr: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmps9bzko9i/h2o_lauren_started_from_python.err
+      Ice root: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmp66h76nh6
+      JVM stdout: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmp66h76nh6/h2o_lauren_started_from_python.out
+      JVM stderr: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmp66h76nh6/h2o_lauren_started_from_python.err
       Server is running at http://127.0.0.1:54321
     Connecting to H2O server at http://127.0.0.1:54321 ... successful.
 
@@ -2703,9 +2706,9 @@ h2o.init(
 <tr><td>H2O_cluster_version:</td>
 <td>3.40.0.3</td></tr>
 <tr><td>H2O_cluster_version_age:</td>
-<td>23 days</td></tr>
+<td>26 days</td></tr>
 <tr><td>H2O_cluster_name:</td>
-<td>H2O_from_python_lauren_gjh5oa</td></tr>
+<td>H2O_from_python_lauren_nkcdt9</td></tr>
 <tr><td>H2O_cluster_total_nodes:</td>
 <td>1</td></tr>
 <tr><td>H2O_cluster_free_memory:</td>
@@ -2776,12 +2779,12 @@ aml_model = aml.train(x=x , y=y_numeric, training_frame=train, blending_frame=bl
                       weights_column='inv_company_weight') 
 ```
     AutoML progress: |
-    20:04:07.150: User specified a validation frame with cross-validation still enabled. Please note that the models will still be validated using cross-validation only, the validation frame will be used to provide purely informative validation metrics on the trained models.
+    21:43:08.383: User specified a validation frame with cross-validation still enabled. Please note that the models will still be validated using cross-validation only, the validation frame will be used to provide purely informative validation metrics on the trained models.
     
-    ███████████████████████████████████████████████
-    20:04:53.13: _weights_column param, All base models use weights_column="inv_company_weight" but Stacked Ensemble does not. If you want to use the same weights_column for the meta learner, please specify it as an argument in the h2o.stackedEnsemble call.
+    █████████████████████████████████████████████████
+    21:43:56.418: _weights_column param, All base models use weights_column="inv_company_weight" but Stacked Ensemble does not. If you want to use the same weights_column for the meta learner, please specify it as an argument in the h2o.stackedEnsemble call.
     
-    ████████████████| (done) 100%
+    ██████████████| (done) 100%
 
 
 
@@ -2792,7 +2795,7 @@ aml_model.mae(),aml_model.mae(valid=True)
 
 
 
-    (0.19200713688347956, 0.23105778352057826)
+    (0.19135958827893823, 0.22960736745400462)
 
 
 
@@ -2804,7 +2807,7 @@ aml_model.r2(),aml_model.r2(valid=True)
 
 
 
-    (0.3467479024441159, 0.29391459646424967)
+    (0.3485089627504697, 0.3039108944907669)
 
 
 
@@ -2858,32 +2861,50 @@ validation_results
     <tr>
       <th>0</th>
       <td>1.0000</td>
-      <td>0.1967</td>
+      <td>0.1901</td>
       <td>0.1679</td>
     </tr>
     <tr>
       <th>1</th>
       <td>2.0000</td>
-      <td>0.1740</td>
+      <td>0.1796</td>
       <td>0.1126</td>
     </tr>
     <tr>
       <th>2</th>
       <td>3.0000</td>
-      <td>0.0220</td>
+      <td>0.0199</td>
       <td>0.0354</td>
     </tr>
     <tr>
       <th>3</th>
       <td>4.0000</td>
-      <td>0.0020</td>
+      <td>0.0016</td>
       <td>0.0099</td>
     </tr>
     <tr>
       <th>4</th>
       <td>5.0000</td>
-      <td>0.0005</td>
+      <td>0.0001</td>
       <td>0.0029</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>6.0000</td>
+      <td>0.0000</td>
+      <td>0.0017</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>12.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>15.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
     </tr>
   </tbody>
 </table>
@@ -2901,7 +2922,7 @@ ml_pct_diff
 
 
 
-    0.022780620135095943
+    0.01469855859528655
 
 
 
@@ -2913,4 +2934,4 @@ ml_pct_diff/benchmark_pct_diff - 1
 
 
 
-    0.12597400290101146
+    -0.273496737127338

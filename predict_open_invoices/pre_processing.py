@@ -5,7 +5,7 @@ from predict_open_invoices.csv_test_data_io import get_csv_test_data
 
 
 def prepare_payments(payments: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
-    """ Validate and filter payments data """
+    """ Validate raw payments data and filter out rows that will not be scored or used in model training."""
     assert payments.invoice_id.count() == payments.__len__(), 'Missing invoice ids'
     assert payments.transaction_date.count() == payments.__len__(), 'Missing transaction dates'
     assert payments.root_exchange_rate_value.count() == payments.__len__(), 'Missing exchange rates'
@@ -13,14 +13,12 @@ def prepare_payments(payments: pandas.DataFrame) -> (pandas.DataFrame, pandas.Da
     assert payments.amount.min() > 0, 'Amounts <= 0'
     assert (payments.amount.isnull() == payments.converted_amount.isnull()).min() == 1, \
         'Converted amounts populated inconsistently from amounts'
-    payments_prepared = payments.drop(columns=['company_id', 'converted_amount'], errors='ignore')
-    payments_prepared['transaction_month'] = payments_prepared.transaction_date.dt.to_period('M').dt.to_timestamp()
-    exclude_payments = OrderedDict({'Missing Amount': payments_prepared.loc[payments_prepared.amount.isnull()]})
-    return apply_filters(exclude_payments, payments_prepared)
+    exclude_payments = OrderedDict({'Missing Amount': payments[payments.amount.isnull()]})
+    return apply_filters(exclude_payments, payments)
 
 
 def prepare_invoices(invoices: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
-    """ Validate invoices data and filter out rows that will not be scored or used in model training."""
+    """ Validate raw invoices data and filter out rows that will not be scored or used in model training."""
     assert invoices.id.count() == invoices.__len__(), 'Missing IDs'
     assert invoices.invoice_date.count() == invoices.__len__(), 'Missing invoice dates'
     assert invoices.status.count() == invoices.__len__(), 'Missing statuses'
@@ -29,76 +27,71 @@ def prepare_invoices(invoices: pandas.DataFrame) -> (pandas.DataFrame, pandas.Da
     assert invoices.currency.count() == invoices.__len__(), 'Missing currencies'
     assert invoices.company_id.count() == invoices.__len__(), 'Missing company IDs'
     assert invoices.customer_id.count() == invoices.__len__(), 'Missing customer IDs'
-    assert invoices.forecast_month.count() == invoices.__len__(), 'Missing forecast month'
     assert invoices.root_exchange_rate_value.min() > 0, 'Exchange rates <= 0'
     assert invoices.amount_inv.min() > 0, 'Amounts <= 0'
-    assert (invoices.forecast_month < invoices.invoice_date.dt.to_period('M')).sum() == 0, \
-        'Forecast month < invoice month'
     invoices = invoices.rename(columns={"id": "invoice_id", "amount_inv": "amount"})\
         .drop(columns=['account_id'], errors='ignore')
+    invoices.loc[invoices.status == 'OPEN', 'cleared_date'] = None
     invoices['invoice_month'] = invoices.invoice_date.dt.to_period('M').dt.to_timestamp()
     invoices['due_month'] = invoices.due_date.dt.to_period('M').dt.to_timestamp()
     invoices['months_allowed'] = months_between(invoices.invoice_month, invoices.due_month)
     exclude_invoices = OrderedDict()
-    exclude_invoices['Missing due date'] = invoices.loc[invoices.due_date.isnull()]
-    exclude_invoices['Due before opened'] = invoices.loc[invoices.due_date < invoices.invoice_date]
-    exclude_invoices['Due over 3 months after opened'] = invoices.loc[invoices.months_allowed > 3]
+    exclude_invoices['Missing due date'] = invoices[invoices.due_date.isnull()]
+    exclude_invoices['Due before opened'] = invoices[invoices.due_date < invoices.invoice_date]
+    exclude_invoices['Due over 3 months after opened'] = invoices[invoices.months_allowed > 3]
+    # filter out dates with high variation - TODO: Filter stats
+    exclude_invoices['Due before 2011-10'] = invoices.query("due_date<'2011-10-01'")
+    exclude_invoices['USD exchange rate out of range [0.7,1.3]'] = invoices[
+        (invoices.currency == 'USD') & (~invoices.root_exchange_rate_value.between(0.7, 1.3))]
+    exclude_invoices['Cleared < opened'] = invoices.query("cleared_date<invoice_date")
+    months_to_clear = months_between(invoices.invoice_date, invoices.cleared_date)
+    exclude_invoices['Cleared 13+ months after opened'] = invoices[months_to_clear > 12]
     invoices_filtered, filter_stats = apply_filters(exclude_invoices, invoices)
     return invoices_filtered, filter_stats
 
 
-def consolidate_invoices_payments(invoices_prepared: pandas.DataFrame, payments_prepared: pandas.DataFrame) -> (
+def combine_invoices_payments(invoices_prepared: pandas.DataFrame, payments_prepared: pandas.DataFrame) -> (
         pandas.DataFrame, pandas.DataFrame):
-    """ Merge and validate prepared invoice and payments data """
+    """ Merge, validate, and create combined variables from prepared invoice and payments data.
+    Output data has one row per invoice and cumulative amount paid, rounded to 4 decimal places."""
     # consolidate invoices with payments
-    consolidated_data = invoices_prepared.merge(payments_prepared, on="invoice_id", suffixes=('_inv', '_pmt'),
-                                                how='left')
-    assert consolidated_data.loc[consolidated_data.amount_pmt > consolidated_data.amount_inv].__len__() == 0, \
-        'Payment amount > invoice amount'
-    # data is sorted by invoice and transaction date.
-    consolidated_data.drop_duplicates(subset=['invoice_id', 'forecast_month'], inplace=True, keep='last')
-    return consolidated_data
-
-
-def feature_engineering(consolidated_data: pandas.DataFrame) -> pandas.DataFrame:
-    """ Modifies consolidated invoice and payments data in place """
+    invoices_prepared['converted_amount'] = invoices_prepared.amount * invoices_prepared.root_exchange_rate_value
+    invoice_payments = invoices_prepared.merge(payments_prepared, on="invoice_id", suffixes=('_inv', '_pmt'),
+                                               how='left')
+    assert (invoice_payments.amount_pmt > invoice_payments.amount_inv).sum() == 0, 'Payment amount > invoice amount'
+    assert invoice_payments.dropna(subset=['company_id_pmt']).query("company_id_pmt!=company_id_inv").__len__() == 0, \
+        'Company does not match between payments and invoices'
+    last_transaction_date = invoice_payments.transaction_date.max()
     # invoices with no transactions: use payments data end date as date of 0 amount
-    consolidated_data.transaction_month = consolidated_data.transaction_month.fillna(
-        consolidated_data.transaction_month.max())
-    consolidated_data.sort_values(by=['invoice_id', 'transaction_date'], inplace=True)
-    consolidated_data.drop_duplicates(subset='invoice_id', keep='last')
-    # normalize by company
-    consolidated_data['converted_amount_inv'] = (consolidated_data.amount_inv *
-                                                 consolidated_data.root_exchange_rate_value_inv)
-    totals_by_company = consolidated_data.groupby("company_id", as_index=False).converted_amount_inv.sum()
-    consolidated_data = consolidated_data.merge(totals_by_company, on="company_id", suffixes=('', '_company'))
-    inv_pct_of_company_total = consolidated_data.converted_amount_inv/consolidated_data.converted_amount_inv_company
-    consolidated_data['inv_pct_of_company_total'] = inv_pct_of_company_total
-    consolidated_data.drop(columns=["converted_amount_inv"], inplace=True, errors='ignore')
-    # date quantities
-    consolidated_data['month_billing'] = (
-            consolidated_data.forecast_month - consolidated_data.invoice_month.dt.to_period('M')
-    ).map(lambda m: m.n+1).clip(upper=13, lower=1)
-    consolidated_data['month_due'] = (
-            consolidated_data.due_month.dt.to_period('M') - consolidated_data.forecast_month
-    ).map(lambda m: m.n+1).clip(upper=13, lower=1)
-    consolidated_data['due_per_month'] = 1 / consolidated_data.month_due
-    consolidated_data.forecast_month = consolidated_data.forecast_month.dt.to_timestamp()
-    return consolidated_data
+    invoice_payments.transaction_date = invoice_payments.transaction_date.fillna(last_transaction_date)
+    invoice_payments['final_date_open'] = invoice_payments.cleared_date.map(
+        lambda cleared_date: min(cleared_date, last_transaction_date)).fillna(last_transaction_date)
+    invoice_payments = invoice_payments.rename(columns={"company_id_inv": "company_id"})\
+        .drop(columns=['company_id_pmt']).sort_values(by=['invoice_id', 'transaction_date'])
+    invoice_payments['amount_pmt_pct'] = (invoice_payments.amount_pmt / invoice_payments.amount_inv)
+    # round to eliminate the impact of negligible payments. hence, an invoice is "collected" when paid > 99.99%.
+    invoice_payments['amount_pmt_pct_cum'] = invoice_payments.groupby("invoice_id").amount_pmt_pct.cumsum()\
+        .fillna(0).round(4)
+    # small percent of payments represent overpayments - filter out
+    invoice_payments = invoice_payments[invoice_payments.amount_pmt_pct_cum <= 1].copy()
+    # dedupe by invoice id and payment date, using the last transaction for each
+    invoice_payments.drop_duplicates(subset=['invoice_id', 'transaction_date'], keep='last', inplace=True)
+    # dedupe by invoice id and cumulative amount paid, using the first transaction for each (dupes are very rare)
+    invoice_payments.drop_duplicates(subset=['invoice_id', 'amount_pmt_pct_cum'], keep='first', inplace=True)
+    return invoice_payments
 
 
 def preprocess_invoices_with_payments(invoices: pandas.DataFrame, payments: pandas.DataFrame) -> \
         (pandas.DataFrame, OrderedDict):
-    """ Takes invoices and payments separately and prepares them to be scored at a point in time.
-    Invoices can be open or closed when scored."""
+    """ Takes raw invoices and payments separately and prepares them for feature engineering.
+    Output data has one row per payment and cumulative amount paid, rounded to 4 decimal places."""
     # confirm invoices are a superset of payments before filtering.
     assert len(set(payments.invoice_id) - set(invoices.id)) == 0, "Not all payments have invoice data"
     # validate and filter inputs separately
     payments_prepared, payment_filter_stats = prepare_payments(payments)
     invoices_prepared, invoice_filter_stats = prepare_invoices(invoices)
     # compare and consolidate inputs
-    consolidated_data = consolidate_invoices_payments(invoices_prepared, payments_prepared)
-    data = feature_engineering(consolidated_data)
+    data = combine_invoices_payments(invoices_prepared, payments_prepared)
     filter_stats_dict = OrderedDict({"payments": payment_filter_stats, "invoices": invoice_filter_stats})
     filter_stats = pandas.concat(filter_stats_dict, names=['Dataset', 'Step Num'])
     return data, filter_stats
@@ -106,10 +99,8 @@ def preprocess_invoices_with_payments(invoices: pandas.DataFrame, payments: pand
 
 def test_pre_processing():
     invoices, payments = get_csv_test_data()
-    # test using the invoice date as an arbitrary point in time to generate the data.
-    invoices['forecast_month'] = invoices.invoice_date.dt.to_period('M')
-    data, filter_stats = preprocess_invoices_with_payments(invoices, payments)
-    return data, filter_stats
+    invoices_with_payments, filter_stats = preprocess_invoices_with_payments(invoices, payments)
+    return invoices_with_payments, filter_stats
 
 
 if __name__ == "__main__":
