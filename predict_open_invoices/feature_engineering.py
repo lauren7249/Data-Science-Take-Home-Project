@@ -36,21 +36,16 @@ def feature_engineering(invoices_with_payments: pandas.DataFrame) -> pandas.Data
     invoices_with_payments.sort_values(by=['invoice_id', 'transaction_date'], inplace=True)
     pmt_columns = [col for col in invoices_with_payments.columns if '_pmt' in col or 'transaction_' in col]
     # last payment before the forecast date for each invoice
-    invoice_end_state = invoices_with_payments.query("transaction_date<forecast_date or amount_pmt_pct_cum==0")\
+    last_prior_payment_state = invoices_with_payments.query("transaction_date<forecast_date or amount_pmt_pct_cum==0")\
         .drop_duplicates(subset='invoice_id', keep='last')[['invoice_id'] + pmt_columns]
     invoice_begin_state = invoices_with_payments.drop(columns=pmt_columns).drop_duplicates()
-    invoice_point_in_time = invoice_begin_state.merge(invoice_end_state, on="invoice_id", how="left")
+    invoice_point_in_time = invoice_begin_state.merge(last_prior_payment_state, on="invoice_id", how="left",
+                                                      suffixes=('', '_prior'))
     assert invoice_point_in_time.invoice_id.value_counts().max() == 1, 'Inputs not preprocessed as expected'
     invoice_point_in_time = add_date_quantities(normalize_by_company(invoice_point_in_time))
-    last_prior_payment_state = invoices_with_payments.loc[
-        (invoices_with_payments.transaction_date < invoices_with_payments.forecast_date),
-        ['invoice_id', 'amount_pmt_pct_cum', 'transaction_date']].drop_duplicates(subset='invoice_id', keep='last')
-    invoice_point_in_time = invoice_point_in_time.merge(last_prior_payment_state,
-                                                        how='left', on='invoice_id', suffixes=('_final', '_prior'))
     assert invoice_point_in_time.invoice_id.nunique() == invoices_with_payments.invoice_id.nunique(), \
         'Invoices dropped in feature engineering'
-    invoice_point_in_time['prior_remaining_inv_pct'] = 1 - invoice_point_in_time.amount_pmt_pct_cum_prior.fillna(0)
-    invoice_point_in_time['final_remaining_inv_pct'] = 1 - invoice_point_in_time.amount_pmt_pct_cum_final.fillna(0)
+    invoice_point_in_time['remaining_inv_pct'] = 1 - invoice_point_in_time.amount_pmt_pct_cum.fillna(0)
     return invoice_point_in_time
 
 

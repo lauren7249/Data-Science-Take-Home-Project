@@ -58,8 +58,9 @@ def postprocess_invoice_outcomes(invoices_with_payments: pandas.DataFrame):
         'Multiple collected dates per invoice'
     invoices_with_payments = assign_open_forecast_date(invoices_with_payments)
     # data is sorted by invoice and transaction date.
-    invoices = invoices_with_payments.drop_duplicates(subset=['invoice_id', 'forecast_date'], keep='last')
+    invoices = invoices_with_payments.drop_duplicates(subset=['invoice_id', 'forecast_date'], keep='last').copy()
     assert invoices.invoice_id.value_counts().max() == 1, 'Multiple forecast dates per invoice'
+    invoices['final_remaining_inv_pct'] = 1 - invoices.amount_pmt_pct_cum.fillna(0)
     filters = OrderedDict()
     filters['Collected < opened'] = invoices.query("collected_date<invoice_date")
     filters['Collected, not cleared'] = invoices[(invoices.collected_date.isnull() is False)
@@ -69,25 +70,25 @@ def postprocess_invoice_outcomes(invoices_with_payments: pandas.DataFrame):
         invoices[((invoices.invoice_date < invoices.collected_date.min()) |
                   (invoices.invoice_date > invoices.collected_date.max()))]
     data, filter_stats = apply_filters(filters, invoices)
+
     return data, filter_stats
 
 
-def train_cash_flow_model(invoices_to_model: pandas.DataFrame):
-    invoices_to_model = feature_engineering(invoices_to_model)
-    assert invoices_to_model.inv_pct_of_company_total.sum() == invoices_to_model.company_id.nunique(), \
+def train_cash_flow_model(feature_data: pandas.DataFrame):
+    assert feature_data.inv_pct_of_company_total.sum() == feature_data.company_id.nunique(), \
         'Company amount normalization does not sum to 1 per company'
-    invoices_to_model['inv_company_weight'] = invoices_to_model.inv_pct_of_company_total \
-        * invoices_to_model.invoice_id.nunique() / invoices_to_model.company_id.nunique()
-    months_to_final_state = months_between(invoices_to_model.forecast_date,
-                                           invoices_to_model.collected_date.fillna(invoices_to_model.final_date_open))
-    invoices_to_model['collected_per_month'] = (invoices_to_model.prior_remaining_inv_pct -
-                                                invoices_to_model.final_remaining_inv_pct)/(months_to_final_state+1)
+    feature_data['inv_company_weight'] = feature_data.inv_pct_of_company_total \
+        * feature_data.invoice_id.nunique() / feature_data.company_id.nunique()
+    months_to_final_state = months_between(feature_data.forecast_date,
+                                           feature_data.collected_date.fillna(feature_data.final_date_open))
+    feature_data['collected_per_month'] = (feature_data.remaining_inv_pct -
+                                           feature_data.final_remaining_inv_pct) / (months_to_final_state + 1)
     # always has a collection rate
-    assert (invoices_to_model.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
-    invoices_to_model['forecast_date_fold'] = (invoices_to_model.forecast_date.rank(pct=True) * 6).round()
+    assert (feature_data.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
+    feature_data['forecast_date_fold'] = (feature_data.forecast_date.rank(pct=True) * 6).round()
     h2o.init(nthreads=-1,  max_mem_size=12)
-    id_columns_h2o = [col for col in ID_COLUMNS if col in invoices_to_model.columns]
-    invoices_to_model_h2o = h2o.H2OFrame(invoices_to_model,
+    id_columns_h2o = [col for col in ID_COLUMNS if col in feature_data.columns]
+    invoices_to_model_h2o = h2o.H2OFrame(feature_data,
                                          column_types=dict(zip(id_columns_h2o, ["string"] * len(id_columns_h2o))))
     # time-based split: cross-validating on future data relative to what is being trained
     train = invoices_to_model_h2o[invoices_to_model_h2o['forecast_date_fold'] <= 3]
@@ -96,7 +97,7 @@ def train_cash_flow_model(invoices_to_model: pandas.DataFrame):
     valid = invoices_to_model_h2o[invoices_to_model_h2o['forecast_date_fold'] > 4]
     y_numeric = 'collected_per_month'
     x = ['months_allowed', 'amount_inv', 'inv_pct_of_company_total', 'currency', 'months_open', 'due_per_month',
-         'prior_remaining_inv_pct']
+         'remaining_inv_pct']
     # huber is a bi-modal distribution
     # hyperparameter tuning is addressed by using AutoML and specifying sort and stopping metrics.
     # train, blend, and validation dataframes are binned sequentially by forecast month
@@ -124,7 +125,8 @@ def train_on_csv_test_data():
     training_filter_stats = pandas.concat([training_payments_filter_stats, preprocess_filter_stats,
                                            postprocess_filter_stats], names=['Step Type'],
                                           keys=['Filtering', 'Pre-processing', 'Filtering'])
-    model = train_cash_flow_model(invoices_to_model)
+    feature_data = feature_engineering(invoices_to_model)
+    model = train_cash_flow_model(feature_data)
     return model, training_filter_stats
 
 
