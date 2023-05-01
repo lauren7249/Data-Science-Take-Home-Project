@@ -11,7 +11,6 @@ from predict_open_invoices.pre_processing import preprocess_invoices_with_paymen
 from predict_open_invoices.feature_engineering import feature_engineering
 h2o.init(nthreads=-1, max_mem_size=12)
 
-
 def normalize_by_company(invoice_point_in_time: pandas.DataFrame):
     """Create invoice weights """
     invoice_point_in_time['converted_amount_inv'] = (
