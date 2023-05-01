@@ -17,11 +17,13 @@ def normalize_by_company(invoice_point_in_time: pandas.DataFrame):
     invoice_point_in_time['converted_amount_inv'] = (
             invoice_point_in_time.amount_inv * invoice_point_in_time.root_exchange_rate_value_inv)
     totals_by_company = invoice_point_in_time.groupby("company_id", as_index=False).converted_amount_inv.sum()
-    pre_processed_data = invoice_point_in_time.merge(totals_by_company, on="company_id", suffixes=('', '_company'))
-    inv_pct_of_company_total = pre_processed_data.converted_amount_inv / pre_processed_data.converted_amount_inv_company
-    pre_processed_data['inv_pct_of_company_total'] = inv_pct_of_company_total
-    pre_processed_data.drop(columns=["converted_amount_inv"], inplace=True, errors='ignore')
-    return pre_processed_data
+    data = invoice_point_in_time.merge(totals_by_company, on="company_id", suffixes=('', '_company'))
+    inv_pct_of_company_total = data.converted_amount_inv / data.converted_amount_inv_company
+    data['inv_pct_of_company_total'] = inv_pct_of_company_total
+    data.drop(columns=["converted_amount_inv"], inplace=True, errors='ignore')
+    assert data.inv_pct_of_company_total.sum() == data.company_id.nunique(), \
+        'Company amount normalization does not sum to 1 per company'
+    return data
 
 
 def select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_frequency: str = 'M',
@@ -83,47 +85,45 @@ def postprocess_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> (p
         invoices[((invoices.invoice_date < invoices.collected_date.min()) |
                   (invoices.invoice_date > invoices.collected_date.max()))]
     data, filter_stats = apply_filters(filters, invoices)
-
     return data, filter_stats
 
 
-def train_cash_flow_model(feature_data: pandas.DataFrame, x: list[str] = ['due_per_month'], ml_metric: str = 'mae',
-                          y: str = 'collected_per_month') -> (h2o.estimators.H2OEstimator, list[h2o.H2OFrame]):
-    """Given a set of featurized invoices, continuous outcome variable, predictors, ML metric, and company-normalized
-    invoice weights, return a trained model and h2o data frames split into training, blending, and validation based on
-    forecast date."""
-    assert feature_data.inv_pct_of_company_total.sum() == feature_data.company_id.nunique(), \
-        'Company amount normalization does not sum to 1 per company'
-    feature_data['inv_company_weight'] = feature_data.inv_pct_of_company_total \
-        * feature_data.invoice_id.nunique() / feature_data.company_id.nunique()
-    months_to_final_state = months_between(feature_data.forecast_date,
-                                           feature_data.collected_date.fillna(feature_data.final_date_open))
-    feature_data['collected_per_month'] = (feature_data.remaining_inv_pct -
-                                           feature_data.final_remaining_inv_pct) / (months_to_final_state + 1)
-    assert (feature_data.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
-    feature_data['forecast_date_fold'] = (feature_data.forecast_date.rank(pct=True) * 6).round()
+def train_model(feature_data: pandas.DataFrame, predictors: list[str] = ['due_per_month'], metric: str = 'mae',
+                y: str = 'collected_per_month', distribution: str = 'huber', max_runtime_secs: int = 60) \
+        -> (h2o.estimators.H2OEstimator, OrderedDict[str: h2o.H2OFrame]):
+    """Given a set of featurized invoices, continuous outcome variable, predictors, and ML metric,
+    return a trained model and h2o data frames split sequentially into training, blending, and validation based on
+    forecast date, weighted by the invoice amount's percentage of the client company's total.  """
     id_columns_h2o = [col for col in ID_COLUMNS if col in feature_data.columns]
-    invoices_to_model_h2o = h2o.H2OFrame(feature_data,
+    normalized_feature_data = normalize_by_company(feature_data)
+    normalized_feature_data['inv_company_weight'] = normalized_feature_data.inv_pct_of_company_total \
+        * normalized_feature_data.invoice_id.nunique() / normalized_feature_data.company_id.nunique()
+    months_to_final_state = months_between(
+        normalized_feature_data.forecast_date,
+        normalized_feature_data.collected_date.fillna(normalized_feature_data.final_date_open))
+    normalized_feature_data['collected_per_month'] = \
+        (normalized_feature_data.remaining_inv_pct - normalized_feature_data.final_remaining_inv_pct) \
+        / (months_to_final_state + 1)
+    assert (normalized_feature_data.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
+    normalized_feature_data['forecast_date_fold'] = (normalized_feature_data.forecast_date.rank(pct=True) * 6).round()
+    invoices_to_model_h2o = h2o.H2OFrame(normalized_feature_data,
                                          column_types=dict(zip(id_columns_h2o, ["string"] * len(id_columns_h2o))))
+    split_h2o_frames = OrderedDict()
     # time-based split: cross-validating on future data relative to what is being trained
-    train = invoices_to_model_h2o[invoices_to_model_h2o['forecast_date_fold'] <= 3]
-    blend = invoices_to_model_h2o[(invoices_to_model_h2o['forecast_date_fold'] > 3)
-                                  & (invoices_to_model_h2o['forecast_date_fold'] <= 4)]
-    valid = invoices_to_model_h2o[invoices_to_model_h2o['forecast_date_fold'] > 4]
-    # huber is a bi-modal distribution.
+    split_h2o_frames['train'] = invoices_to_model_h2o[invoices_to_model_h2o['forecast_date_fold'] <= 3]
+    split_h2o_frames['test'] = invoices_to_model_h2o[(invoices_to_model_h2o['forecast_date_fold'] > 3)
+                                                     & (invoices_to_model_h2o['forecast_date_fold'] <= 4)]
+    split_h2o_frames['validation'] = invoices_to_model_h2o[invoices_to_model_h2o['forecast_date_fold'] > 4]
     # hyperparameter tuning is addressed by using AutoML and specifying sort and stopping metrics.
-    # train, blend, and validation dataframes are binned sequentially by forecast month.
-    # this enforces the time-based split during hyperparameter tuning.
-    aml = H2OAutoML(max_runtime_secs=60, distribution='huber', sort_metric=ml_metric, stopping_metric=ml_metric,
-                    stopping_tolerance=0.01)
-    aml_model = aml.train(x=x, y=y, training_frame=train, blending_frame=blend, weights_column='inv_company_weight')
-    return aml_model, [train, blend, valid]
+    aml = H2OAutoML(max_runtime_secs=max_runtime_secs, distribution=distribution,
+                    sort_metric=metric, stopping_metric=metric, stopping_tolerance=0.01)
+    aml_model = aml.train(training_frame=split_h2o_frames['train'], blending_frame=split_h2o_frames['test'],
+                          x=predictors, y=y, weights_column='inv_company_weight')
+    return aml_model, split_h2o_frames
 
 
-def train_on_csv_test_data(x_columns: list[str] = ['months_allowed', 'amount_inv', 'inv_pct_of_company_total',
-                                                   'currency', 'months_open', 'due_per_month', 'remaining_inv_pct'],
-                           ml_metric: str = 'mae') -> \
-        (pandas.DataFrame, h2o.estimators.H2OEstimator, list[h2o.H2OFrame]):
+def train_on_csv_test_data(predictors: list[str] = ['due_per_month'], metric: str = 'mae') -> \
+        (pandas.DataFrame, h2o.estimators.H2OEstimator, OrderedDict[str: h2o.H2OFrame]):
     """ Get CSV test data, pre-filter, preprocess, post-process, featurize, train a model. Return a report summarizing
     all filters used, the trained model, and a list of h2o frames split 3 ways based on forecast date for validation."""
     invoices, payments = get_csv_test_data()
@@ -140,15 +140,22 @@ def train_on_csv_test_data(x_columns: list[str] = ['months_allowed', 'amount_inv
     training_filter_stats = pandas.concat([training_payments_filter_stats, preprocess_filter_stats,
                                            postprocess_filter_stats], names=['Step Type'],
                                           keys=['Filtering', 'Pre-processing', 'Filtering'])
-    feature_data = normalize_by_company(feature_engineering(invoices_to_model))
-    model, h2o_frames = train_cash_flow_model(feature_data, x=x_columns, y='collected_per_month', ml_metric=ml_metric)
+    feature_data = feature_engineering(invoices_to_model)
+    model, h2o_frames = train_model(feature_data, predictors=predictors, y='collected_per_month', metric=metric)
     return training_filter_stats, model, h2o_frames
 
 
 if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
-    train_filter_stats, trained_model, time_based_split_h2o_frames = train_on_csv_test_data()
-    h2o.save_model(trained_model, path='trained_model', force=True)
+    ml_metric = 'mae'
+    train_filter_stats, baseline_model, time_based_split_h2o_frames = train_on_csv_test_data(
+        predictors=['due_per_month'], metric=ml_metric)
+    x = ['months_allowed', 'amount_inv', 'currency', 'months_open', 'due_per_month', 'remaining_inv_pct']
+    train_filter_stats, trained_model, time_based_split_h2o_frames = train_on_csv_test_data(
+        predictors=x, metric=ml_metric)
+    h2o.save_model(trained_model, path='trained_models', force=True)
     print(train_filter_stats)
-    for h2o_frame in time_based_split_h2o_frames:
-        print(trained_model.model_performance(h2o_frame)['mae'])
+    for split in time_based_split_h2o_frames.keys():
+        h2o_frame = time_based_split_h2o_frames[split]
+        print(f"Baseline model {ml_metric} on {split} data: {baseline_model.model_performance(h2o_frame)[ml_metric]}\t"
+              f"Trained model {ml_metric} on {split} data: {trained_model.model_performance(h2o_frame)[ml_metric]} ")

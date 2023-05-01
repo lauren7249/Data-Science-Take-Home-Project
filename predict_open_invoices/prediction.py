@@ -21,7 +21,7 @@ def test_prediction_on_open_invoices(invoices_raw: pandas.DataFrame, payments_ra
     open_invoices_with_payments['forecast_date'] = payments_raw.transaction_date.max()
     open_invoices_feature_data = feature_engineering(open_invoices_with_payments.query("forecast_date>=invoice_date"))
     assert open_invoices_feature_data.invoice_id.value_counts().max() == 1, 'Duplicates per open invoice'
-    list_of_files = glob.glob('trained_model/*')  # * means all if need specific format then *.csv
+    list_of_files = glob.glob('trained_models/*')  # * means all if need specific format then *.csv
     latest_file = max(list_of_files, key=os.path.getctime)
     model = h2o.load_model(latest_file)
     return predict_collection_date(open_invoices_feature_data, model)
