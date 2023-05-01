@@ -135,7 +135,7 @@ def train_on_csv_test_data(x_columns: list[str] = ['months_allowed', 'amount_inv
 if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
     train_filter_stats, trained_model, time_based_split_h2o_frames = train_on_csv_test_data()
-    h2o.upload_model(trained_model)
+    h2o.save_model(trained_model, path='trained_model', force=True)
     print(train_filter_stats)
     for h2o_frame in time_based_split_h2o_frames:
         print(trained_model.model_performance(h2o_frame)['mae'])

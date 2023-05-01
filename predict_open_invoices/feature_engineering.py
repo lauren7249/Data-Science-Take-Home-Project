@@ -33,7 +33,7 @@ def feature_engineering(invoices_with_payments: pandas.DataFrame) -> pandas.Data
     assert invoices_with_payments.forecast_date.count() == invoices_with_payments.__len__(), 'Missing forecast date'
     assert (invoices_with_payments.forecast_date < invoices_with_payments.invoice_month).sum() == 0, \
         'Forecast < invoice opened'
-    invoices_with_payments.sort_values(by=['invoice_id', 'transaction_date'], inplace=True)
+    invoices_with_payments = invoices_with_payments.sort_values(by=['invoice_id', 'transaction_date']).copy()
     pmt_columns = [col for col in invoices_with_payments.columns if '_pmt' in col or 'transaction_' in col]
     # last payment before the forecast date for each invoice
     last_prior_payment_state = invoices_with_payments.query("transaction_date<forecast_date or amount_pmt_pct_cum==0")\
