@@ -5,14 +5,14 @@ import numpy
 import h2o
 from h2o.automl import H2OAutoML
 from predict_open_invoices import ID_COLUMNS
-from predict_open_invoices.utils import months_between
+from predict_open_invoices.utils import months_between, apply_filters
 from predict_open_invoices.csv_test_data_io import get_csv_test_data
-from predict_open_invoices.pre_processing import preprocess_invoices_with_payments, apply_filters
+from predict_open_invoices.pre_processing import preprocess_invoices_with_payments
 from predict_open_invoices.feature_engineering import feature_engineering
 
 
 def select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_frequency: str = 'M',
-                         first_transaction_date: pandas.Timestamp = None):
+                         first_transaction_date: pandas.Timestamp = None) -> pandas.Timestamp:
     if pandas.isnull(max_forecast_date):
         return None
     # begin forecast window when the invoice is active and the payments data is complete
@@ -28,7 +28,7 @@ def select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_f
 select_forecast_date = numpy.vectorize(select_forecast_date)
 
 
-def assign_open_forecast_date(invoices_with_payments: pandas.DataFrame):
+def assign_open_forecast_date(invoices_with_payments: pandas.DataFrame) -> pandas.DataFrame:
     """Add a randomly sampled forecast date while the invoice was open."""
     invoices_with_payments['forecast_date_collected'] = select_forecast_date(
         invoices_with_payments.invoice_id, invoices_with_payments.invoice_date, invoices_with_payments.collected_date)
@@ -47,7 +47,7 @@ def assign_open_forecast_date(invoices_with_payments: pandas.DataFrame):
     return invoices_with_payments
 
 
-def postprocess_invoice_outcomes(invoices_with_payments: pandas.DataFrame):
+def postprocess_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
     """ Process, validate, filter, and assign collection date to invoices with payments.
      Sample forecast dates between invoice date and collection date (if present) per invoice for training."""
     # invoice is collected if/when payments accumulate to the invoice amount in the original currency.
@@ -74,7 +74,10 @@ def postprocess_invoice_outcomes(invoices_with_payments: pandas.DataFrame):
     return data, filter_stats
 
 
-def train_cash_flow_model(feature_data: pandas.DataFrame):
+def train_cash_flow_model(feature_data: pandas.DataFrame, x: list[str] = ['due_per_month'], ml_metric: str = 'mae',
+                          y: str = 'collected_per_month') -> (h2o.estimators.H2OEstimator, list[h2o.H2OFrame]):
+    """Given a set of featurized invoices, continuous outcome variable, predictors, and ML metric,
+    return a trained model and h2o data frames split into training, blending, and validation based on forecast date."""
     assert feature_data.inv_pct_of_company_total.sum() == feature_data.company_id.nunique(), \
         'Company amount normalization does not sum to 1 per company'
     feature_data['inv_company_weight'] = feature_data.inv_pct_of_company_total \
@@ -83,7 +86,6 @@ def train_cash_flow_model(feature_data: pandas.DataFrame):
                                            feature_data.collected_date.fillna(feature_data.final_date_open))
     feature_data['collected_per_month'] = (feature_data.remaining_inv_pct -
                                            feature_data.final_remaining_inv_pct) / (months_to_final_state + 1)
-    # always has a collection rate
     assert (feature_data.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
     feature_data['forecast_date_fold'] = (feature_data.forecast_date.rank(pct=True) * 6).round()
     h2o.init(nthreads=-1,  max_mem_size=12)
@@ -95,22 +97,22 @@ def train_cash_flow_model(feature_data: pandas.DataFrame):
     blend = invoices_to_model_h2o[(invoices_to_model_h2o['forecast_date_fold'] > 3)
                                   & (invoices_to_model_h2o['forecast_date_fold'] <= 4)]
     valid = invoices_to_model_h2o[invoices_to_model_h2o['forecast_date_fold'] > 4]
-    y_numeric = 'collected_per_month'
-    x = ['months_allowed', 'amount_inv', 'inv_pct_of_company_total', 'currency', 'months_open', 'due_per_month',
-         'remaining_inv_pct']
-    # huber is a bi-modal distribution
+    # huber is a bi-modal distribution.
     # hyperparameter tuning is addressed by using AutoML and specifying sort and stopping metrics.
-    # train, blend, and validation dataframes are binned sequentially by forecast month
+    # train, blend, and validation dataframes are binned sequentially by forecast month.
     # this enforces the time-based split during hyperparameter tuning.
-    aml = H2OAutoML(max_runtime_secs=60, distribution='huber', sort_metric='mae', stopping_metric='mae',
+    aml = H2OAutoML(max_runtime_secs=60, distribution='huber', sort_metric=ml_metric, stopping_metric=ml_metric,
                     stopping_tolerance=0.01)
-    aml_model = aml.train(x=x, y=y_numeric, training_frame=train, blending_frame=blend, validation_frame=valid,
-                          weights_column='inv_company_weight')
-    return aml_model
+    aml_model = aml.train(x=x, y=y, training_frame=train, blending_frame=blend, weights_column='inv_company_weight')
+    return aml_model, [train, blend, valid]
 
 
-def train_on_csv_test_data():
-    """ Get CSV test data"""
+def train_on_csv_test_data(x_columns: list[str] = ['months_allowed', 'amount_inv', 'inv_pct_of_company_total',
+                                                   'currency', 'months_open', 'due_per_month', 'remaining_inv_pct'],
+                           ml_metric: str = 'mae') -> \
+        (pandas.DataFrame, h2o.estimators.H2OEstimator, list[h2o.H2OFrame]):
+    """ Get CSV test data, pre-filter, preprocess, post-process, featurize, train a model. Return a report summarizing
+    all filters used, the trained model, and a list of h2o frames split 3 ways based on forecast date for validation."""
     invoices, payments = get_csv_test_data()
     payments_training_filters = OrderedDict()
     # last month of payments data is incomplete and not from a representative period in the month
@@ -126,12 +128,13 @@ def train_on_csv_test_data():
                                            postprocess_filter_stats], names=['Step Type'],
                                           keys=['Filtering', 'Pre-processing', 'Filtering'])
     feature_data = feature_engineering(invoices_to_model)
-    model = train_cash_flow_model(feature_data)
-    return model, training_filter_stats
+    model, h2o_frames = train_cash_flow_model(feature_data, x=x_columns, y='collected_per_month', ml_metric=ml_metric)
+    return training_filter_stats, model, h2o_frames
 
 
 if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
-    trained_model, train_filter_stats = train_on_csv_test_data()
+    train_filter_stats, trained_model, time_based_split_h2o_frames = train_on_csv_test_data()
     print(train_filter_stats)
-
+    for h2o_frame in time_based_split_h2o_frames:
+        print(trained_model.model_performance(h2o_frame)['mae'])

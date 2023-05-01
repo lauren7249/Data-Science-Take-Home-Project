@@ -16,3 +16,7 @@ def get_csv_test_data() -> (pandas.DataFrame, pandas.DataFrame):
                                parse_dates=['transaction_date'], date_format=DATE_FORMAT)
     assert payments.__len__() == 111623, "Rows in payments test CSV have been modified. Future checks will not be valid"
     return invoices, payments
+
+
+if __name__ == '__main__':
+    get_csv_test_data()
