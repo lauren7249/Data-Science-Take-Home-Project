@@ -9,6 +9,7 @@ from predict_open_invoices.utils import months_between, apply_filters
 from predict_open_invoices.csv_test_data_io import get_csv_test_data
 from predict_open_invoices.pre_processing import preprocess_invoices_with_payments
 from predict_open_invoices.feature_engineering import feature_engineering
+h2o.init(nthreads=-1, max_mem_size=12)
 
 
 def select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_frequency: str = 'M',
@@ -88,7 +89,6 @@ def train_cash_flow_model(feature_data: pandas.DataFrame, x: list[str] = ['due_p
                                            feature_data.final_remaining_inv_pct) / (months_to_final_state + 1)
     assert (feature_data.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
     feature_data['forecast_date_fold'] = (feature_data.forecast_date.rank(pct=True) * 6).round()
-    h2o.init(nthreads=-1,  max_mem_size=12)
     id_columns_h2o = [col for col in ID_COLUMNS if col in feature_data.columns]
     invoices_to_model_h2o = h2o.H2OFrame(feature_data,
                                          column_types=dict(zip(id_columns_h2o, ["string"] * len(id_columns_h2o))))
@@ -135,6 +135,7 @@ def train_on_csv_test_data(x_columns: list[str] = ['months_allowed', 'amount_inv
 if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
     train_filter_stats, trained_model, time_based_split_h2o_frames = train_on_csv_test_data()
+    h2o.upload_model(trained_model)
     print(train_filter_stats)
     for h2o_frame in time_based_split_h2o_frames:
         print(trained_model.model_performance(h2o_frame)['mae'])
