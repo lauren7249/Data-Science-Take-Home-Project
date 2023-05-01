@@ -4,17 +4,6 @@ from predict_open_invoices.csv_test_data_io import get_csv_test_data
 from predict_open_invoices.pre_processing import preprocess_invoices_with_payments
 
 
-def normalize_by_company(invoice_point_in_time: pandas.DataFrame):
-    invoice_point_in_time['converted_amount_inv'] = (
-            invoice_point_in_time.amount_inv * invoice_point_in_time.root_exchange_rate_value_inv)
-    totals_by_company = invoice_point_in_time.groupby("company_id", as_index=False).converted_amount_inv.sum()
-    pre_processed_data = invoice_point_in_time.merge(totals_by_company, on="company_id", suffixes=('', '_company'))
-    inv_pct_of_company_total = pre_processed_data.converted_amount_inv / pre_processed_data.converted_amount_inv_company
-    pre_processed_data['inv_pct_of_company_total'] = inv_pct_of_company_total
-    pre_processed_data.drop(columns=["converted_amount_inv"], inplace=True, errors='ignore')
-    return pre_processed_data
-
-
 def add_date_quantities(invoice_point_in_time: pandas.DataFrame):
     invoice_point_in_time['months_open'] = (
             months_between(invoice_point_in_time.invoice_date, invoice_point_in_time.forecast_date
@@ -42,7 +31,7 @@ def feature_engineering(invoices_with_payments: pandas.DataFrame) -> pandas.Data
     invoice_point_in_time = invoice_begin_state.merge(last_prior_payment_state, on="invoice_id", how="left",
                                                       suffixes=('', '_prior'))
     assert invoice_point_in_time.invoice_id.value_counts().max() == 1, 'Inputs not preprocessed as expected'
-    invoice_point_in_time = add_date_quantities(normalize_by_company(invoice_point_in_time))
+    invoice_point_in_time = add_date_quantities(invoice_point_in_time)
     assert invoice_point_in_time.invoice_id.nunique() == invoices_with_payments.invoice_id.nunique(), \
         'Invoices dropped in feature engineering'
     invoice_point_in_time['remaining_inv_pct'] = 1 - invoice_point_in_time.amount_pmt_pct_cum.fillna(0)

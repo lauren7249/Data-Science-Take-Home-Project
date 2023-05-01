@@ -12,6 +12,18 @@ from predict_open_invoices.feature_engineering import feature_engineering
 h2o.init(nthreads=-1, max_mem_size=12)
 
 
+def normalize_by_company(invoice_point_in_time: pandas.DataFrame):
+    """Create invoice weights """
+    invoice_point_in_time['converted_amount_inv'] = (
+            invoice_point_in_time.amount_inv * invoice_point_in_time.root_exchange_rate_value_inv)
+    totals_by_company = invoice_point_in_time.groupby("company_id", as_index=False).converted_amount_inv.sum()
+    pre_processed_data = invoice_point_in_time.merge(totals_by_company, on="company_id", suffixes=('', '_company'))
+    inv_pct_of_company_total = pre_processed_data.converted_amount_inv / pre_processed_data.converted_amount_inv_company
+    pre_processed_data['inv_pct_of_company_total'] = inv_pct_of_company_total
+    pre_processed_data.drop(columns=["converted_amount_inv"], inplace=True, errors='ignore')
+    return pre_processed_data
+
+
 def select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_frequency: str = 'M',
                          first_transaction_date: pandas.Timestamp = None) -> pandas.Timestamp:
     if pandas.isnull(max_forecast_date):
@@ -77,8 +89,9 @@ def postprocess_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> (p
 
 def train_cash_flow_model(feature_data: pandas.DataFrame, x: list[str] = ['due_per_month'], ml_metric: str = 'mae',
                           y: str = 'collected_per_month') -> (h2o.estimators.H2OEstimator, list[h2o.H2OFrame]):
-    """Given a set of featurized invoices, continuous outcome variable, predictors, and ML metric,
-    return a trained model and h2o data frames split into training, blending, and validation based on forecast date."""
+    """Given a set of featurized invoices, continuous outcome variable, predictors, ML metric, and company-normalized
+    invoice weights, return a trained model and h2o data frames split into training, blending, and validation based on
+    forecast date."""
     assert feature_data.inv_pct_of_company_total.sum() == feature_data.company_id.nunique(), \
         'Company amount normalization does not sum to 1 per company'
     feature_data['inv_company_weight'] = feature_data.inv_pct_of_company_total \
@@ -127,7 +140,7 @@ def train_on_csv_test_data(x_columns: list[str] = ['months_allowed', 'amount_inv
     training_filter_stats = pandas.concat([training_payments_filter_stats, preprocess_filter_stats,
                                            postprocess_filter_stats], names=['Step Type'],
                                           keys=['Filtering', 'Pre-processing', 'Filtering'])
-    feature_data = feature_engineering(invoices_to_model)
+    feature_data = normalize_by_company(feature_engineering(invoices_to_model))
     model, h2o_frames = train_cash_flow_model(feature_data, x=x_columns, y='collected_per_month', ml_metric=ml_metric)
     return training_filter_stats, model, h2o_frames
 
