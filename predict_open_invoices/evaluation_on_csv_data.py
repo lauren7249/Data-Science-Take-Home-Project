@@ -55,17 +55,15 @@ def train_model_version(params: dict = dict(metric='mae', predictors=['due_per_m
     neptune_model_version = neptune.init_model_version(model=f"{NEPTUNE_PROJECT_ID}-{NEPTUNE_MODEL_ID}",
                                                        project=NEPTUNE_PROJECT_NAME)
     neptune_model_version['predictors'] = stringify_unsupported(params['predictors'])
+    neptune_model_version['response_column'] = params['y']
     neptune_model_version['response_distribution'] = params['distribution']
-    neptune_model_version['training_parameters'] = stringify_unsupported(['response_column', 'max_runtime_secs'])
+    neptune_model_version['max_runtime_secs'] = params['max_runtime_secs']
     neptune_model_version['ml_sort_metric'] = params['metric']
     neptune_model_version['ml_log_metrics'] = stringify_unsupported(['r2', 'mae', 'rmsle'])
-    neptune_model_version['max_runtime_secs'] = params['max_runtime_secs']
     train, test = get_data_splits(['train', 'test'])
     model = train_model(train, test, **params)
     neptune_model_version['algo'] = model.algo
     neptune_model_version['weights_column'] = model.actual_params['weights_column']['column_name']
-    for training_param in ast.literal_eval(neptune_model_version['training_parameters'].fetch()):
-        neptune_model_version[f'training_parameter/{training_param}'] = model.actual_params[training_param]
     temp_dir = tempfile.TemporaryDirectory().name
     h2o.save_model(model, path=temp_dir, force=True)
     neptune_model_version['model_file'].upload_files(f"{temp_dir}/*")
