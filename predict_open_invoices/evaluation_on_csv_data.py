@@ -8,9 +8,9 @@ import optuna
 import neptune
 from neptune.types import File
 from neptune.utils import stringify_unsupported
-from predict_open_invoices import ID_COLUMNS
 from predict_open_invoices import DATA_FOLDER
 from predict_open_invoices.training import get_training_data_from_csvs, train_model
+from predict_open_invoices.prediction import predict
 NEPTUNE_PROJECT_NAME = "open-invoices-model"
 NEPTUNE_PROJECT = neptune.init_project(project=NEPTUNE_PROJECT_NAME, api_token=os.getenv('NEPTUNE_API_TOKEN'))
 NEPTUNE_PROJECT_ID = NEPTUNE_PROJECT['sys/id'].fetch()
@@ -40,34 +40,34 @@ def create_neptune_csv_model() -> neptune.Model:
     NEPTUNE_MODEL.sync()
 
 
-def get_data_splits(keys: list[str] = ['train', 'test']) -> list[h2o.H2OFrame]:
+def get_data_splits(keys: list[str] = ['train', 'test']) -> list[pandas.DataFrame]:
     if len(keys) == 0:
         return keys
-    h2o.init(nthreads=-1, max_mem_size=12)
-    h2o_frames = []
+    #h2o.init(nthreads=-1, max_mem_size=12)
+    frames = []
     for key in keys:
         temp_path = tempfile.NamedTemporaryFile().file.name
         NEPTUNE_MODEL[f'data/{key}'].download(temp_path)
         df = pandas.read_pickle(temp_path)
-        id_columns_h2o = [col for col in ID_COLUMNS if col in df.columns]
-        h2o_frames.append(h2o.H2OFrame(df, column_types=dict(zip(id_columns_h2o, ["string"] * len(id_columns_h2o)))))
-    return h2o_frames
+        #id_columns_h2o = [col for col in ID_COLUMNS if col in df.columns]
+        frames.append(df)
+    return frames
 
 
-def get_monthly_forecast_error(h2o_frame: h2o.H2OFrame, h2o_model: h2o.estimators.H2OEstimator,
+def get_monthly_forecast_error(df: pandas.DataFrame, h2o_model: h2o.estimators.H2OEstimator,
                                y: str = 'collected_per_month'):
-    results = h2o_frame[['collected_per_month', 'month_collected', 'inv_pct_of_company_total']]\
-        .cbind(h2o_model.predict(h2o_frame)).as_data_frame()
+    predictions = predict(df, h2o_model)
+    df = df[['collected_per_month', 'month_collected', 'inv_pct_of_company_total']]
     if y == 'collected_per_month':
-        results["predict_month_collected"] = (1 / results["predict"]).replace(numpy.inf, None).round(0)
+        df["predict_month_collected"] = (1 / predictions).replace(numpy.inf, None).round(0)
     else:
-        results['predict_month_collected'] = results.predict.round(0).astype(int)
-    results = results.groupby("predict_month_collected", as_index=False).inv_pct_of_company_total.sum().merge(
-        results.groupby("month_collected", as_index=False).inv_pct_of_company_total.sum()
+        df['predict_month_collected'] = predictions.round(0).astype(int)
+    df = df.groupby("predict_month_collected", as_index=False).inv_pct_of_company_total.sum().merge(
+        df.groupby("month_collected", as_index=False).inv_pct_of_company_total.sum()
         .rename(columns={"month_collected": "predict_month_collected"}), on="predict_month_collected",
         suffixes=('_predict', ''), how="left")
-    results['abs_diff'] = (results.inv_pct_of_company_total - results.inv_pct_of_company_total_predict).abs()
-    mape = float(results.abs_diff.sum()/results.inv_pct_of_company_total_predict.sum())
+    df['abs_diff'] = (df.inv_pct_of_company_total - df.inv_pct_of_company_total_predict).abs()
+    mape = float(df.abs_diff.sum()/df.inv_pct_of_company_total_predict.sum())
     return mape
 
 
@@ -131,4 +131,3 @@ if __name__ == '__main__':
     create_neptune_csv_model()
     study = optuna.create_study(direction='minimize')
     study.optimize(optuna_objective, n_trials=3)
-    model = get_best_model()

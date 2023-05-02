@@ -3,24 +3,19 @@ import tempfile
 import h2o
 import pandas
 import neptune
+from predict_open_invoices import NEPTUNE_PROJECT_NAME, NEPTUNE_MODEL_ID
 from predict_open_invoices.csv_test_data_io import get_csv_test_data
 from predict_open_invoices.pre_processing import preprocess_invoices_with_payments
 from predict_open_invoices.feature_engineering import feature_engineering
 h2o.init(nthreads=-1, max_mem_size=12)
-NEPTUNE_PROJECT_NAME = "open-invoices-model"
 NEPTUNE_PROJECT = neptune.init_project(project=NEPTUNE_PROJECT_NAME, api_token=os.getenv('NEPTUNE_API_TOKEN'))
 NEPTUNE_PROJECT_ID = NEPTUNE_PROJECT['sys/id'].fetch()
-NEPTUNE_MODEL_ID = "CSVDATA"
-try:
-    NEPTUNE_MODEL = neptune.init_model(key=NEPTUNE_MODEL_ID, project=NEPTUNE_PROJECT_NAME,
-                                       name="Trained on CSV data.", api_token=os.getenv('NEPTUNE_API_TOKEN'))
-except neptune.exceptions.NeptuneModelKeyAlreadyExistsError:
-    NEPTUNE_MODEL = neptune.init_model(with_id=f"{NEPTUNE_PROJECT_ID}-{NEPTUNE_MODEL_ID}", project=NEPTUNE_PROJECT_NAME)
 
 
 def get_best_model(sort_column: str = 'monthly_mape_test') -> h2o.estimators.H2OEstimator:
-    NEPTUNE_MODEL.sync()
-    model_versions_table = NEPTUNE_MODEL.fetch_model_versions_table().to_pandas()
+    neptune_model = neptune.init_model(with_id=f"{NEPTUNE_PROJECT_ID}-{NEPTUNE_MODEL_ID}", project=NEPTUNE_PROJECT_NAME)
+    neptune_model.sync()
+    model_versions_table = neptune_model.fetch_model_versions_table().to_pandas()
     best_column_value = model_versions_table.sort_values(by=sort_column).iloc[0][sort_column]
     best_model_info = model_versions_table[model_versions_table[sort_column] == best_column_value]\
         .sort_values(by='test_metric/r2', ascending=False).iloc[0]
