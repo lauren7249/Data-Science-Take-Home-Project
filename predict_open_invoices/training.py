@@ -9,21 +9,6 @@ from predict_open_invoices.utils import months_between, apply_filters
 from predict_open_invoices.csv_test_data_io import get_csv_test_data
 from predict_open_invoices.pre_processing import preprocess_invoices_with_payments
 from predict_open_invoices.feature_engineering import feature_engineering
-h2o.init(nthreads=-1, max_mem_size=12)
-
-
-def _normalize_by_company(invoice_point_in_time: pandas.DataFrame) -> pandas.DataFrame:
-    """Add row weights to invoices for training."""
-    invoice_point_in_time['converted_amount_inv'] = (
-            invoice_point_in_time.amount_inv * invoice_point_in_time.root_exchange_rate_value_inv)
-    totals_by_company = invoice_point_in_time.groupby("company_id", as_index=False).converted_amount_inv.sum()
-    data = invoice_point_in_time.merge(totals_by_company, on="company_id", suffixes=('', '_company'))
-    inv_pct_of_company_total = data.converted_amount_inv / data.converted_amount_inv_company
-    data['inv_pct_of_company_total'] = inv_pct_of_company_total
-    data.drop(columns=["converted_amount_inv"], inplace=True, errors='ignore')
-    assert data.inv_pct_of_company_total.sum() == data.company_id.nunique(), \
-        'Company amount normalization does not sum to 1 per company'
-    return data
 
 
 def __select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_frequency: str = 'M',
@@ -45,7 +30,21 @@ def __select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast
 _select_forecast_date = numpy.vectorize(__select_forecast_date)
 
 
-def assign_open_forecast_date(invoices_with_payments: pandas.DataFrame) -> pandas.DataFrame:
+def _normalize_by_company(invoice_point_in_time: pandas.DataFrame) -> pandas.DataFrame:
+    """Add row weights to invoices for training."""
+    invoice_point_in_time['converted_amount_inv'] = (
+            invoice_point_in_time.amount_inv * invoice_point_in_time.root_exchange_rate_value_inv)
+    totals_by_company = invoice_point_in_time.groupby("company_id", as_index=False).converted_amount_inv.sum()
+    data = invoice_point_in_time.merge(totals_by_company, on="company_id", suffixes=('', '_company'))
+    inv_pct_of_company_total = data.converted_amount_inv / data.converted_amount_inv_company
+    data['inv_pct_of_company_total'] = inv_pct_of_company_total
+    data.drop(columns=["converted_amount_inv"], inplace=True, errors='ignore')
+    assert data.inv_pct_of_company_total.sum() == data.company_id.nunique(), \
+        'Company amount normalization does not sum to 1 per company'
+    return data
+
+
+def _assign_open_forecast_date(invoices_with_payments: pandas.DataFrame) -> pandas.DataFrame:
     """Add a randomly sampled forecast date while the invoice was open."""
     invoices_with_payments['forecast_date_collected'] = _select_forecast_date(
         invoices_with_payments.invoice_id, invoices_with_payments.invoice_date, invoices_with_payments.collected_date)
@@ -73,7 +72,7 @@ def _post_process_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> 
         .rename(columns={"transaction_date": "collected_date"}), on="invoice_id", how="left")
     assert invoices_with_payments.groupby("invoice_id").collected_date.nunique().max() == 1, \
         'Multiple collected dates per invoice'
-    invoices_with_payments = assign_open_forecast_date(invoices_with_payments)
+    invoices_with_payments = _assign_open_forecast_date(invoices_with_payments)
     # data is sorted by invoice and transaction date.
     invoices = invoices_with_payments.drop_duplicates(subset=['invoice_id', 'forecast_date'], keep='last').copy()
     assert invoices.invoice_id.value_counts().max() == 1, 'Multiple forecast dates per invoice'
@@ -107,6 +106,7 @@ def _get_h2o_training_data(feature_data: pandas.DataFrame) -> OrderedDict[str: h
     assert (normalized_feature_data.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
     normalized_feature_data['forecast_date_fold'] = (normalized_feature_data.forecast_date.rank(pct=True) * 6).round()
     id_columns_h2o = [col for col in ID_COLUMNS if col in feature_data.columns]
+    h2o.init(nthreads=-1, max_mem_size=12)
     invoices_to_model_h2o = h2o.H2OFrame(normalized_feature_data.select_dtypes(exclude='datetime'),
                                          column_types=dict(zip(id_columns_h2o, ["string"] * len(id_columns_h2o))))
     h2o_frames = OrderedDict()
@@ -155,6 +155,7 @@ def train_model(train: h2o.H2OFrame, test: h2o.H2OFrame, predictors: list[str] =
 
 def _test_training_on_csvs(metric: str) -> \
         (h2o.estimators.H2OEstimator, OrderedDict[str: h2o.H2OFrame], pandas.DataFrame):
+    """Test module on local CSV data."""
     h2o_frames, filter_stats_csv = get_training_data_from_csvs()
     params = dict(metric=metric, y='collected_per_month', distribution='huber', predictors=['due_per_month'],
                   max_runtime_secs=60)
