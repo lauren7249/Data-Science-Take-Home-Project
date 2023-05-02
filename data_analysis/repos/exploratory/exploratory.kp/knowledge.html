@@ -7,7 +7,7 @@ tldr: A machine learning project is only as good as the data that goes into it. 
   are some of the high level aspects of the data that we can discover? How should
   we clean and filter the data?
 tags: []
-updated_at: 2023-05-01 10:10:57.566073
+updated_at: 2023-05-02 10:16:22.060295
 thumbnail: images/output_20_1.png</p>
 <hr />
 <p><code>python
@@ -1979,10 +1979,21 @@ benchmark</code></p>
 </table>
 </div>
 
-<p><code>python
-benchmark_pct_diff = mean_absolute_error(benchmark.inv_pct_of_company_total, benchmark.inv_pct_of_company_total_due)
-benchmark_pct_diff</code></p>
-<pre><code>0.020231923717956988
+<p>```python</p>
+<h1>means method</h1>
+<p>benchmark_pct_diff = mean_absolute_error(benchmark.inv_pct_of_company_total, 
+                                         benchmark.inv_pct_of_company_total_due)/benchmark.inv_pct_of_company_total_due.mean()
+benchmark_pct_diff
+```</p>
+<pre><code>0.2047409978241358
+</code></pre>
+<p>```python</p>
+<h1>sums method</h1>
+<p>benchmark['abs_diff'] = (benchmark.inv_pct_of_company_total \
+                                  - benchmark.inv_pct_of_company_total_due).abs()
+benchmark.abs_diff.sum()/benchmark.inv_pct_of_company_total_due.sum()
+```</p>
+<pre><code>0.2047409978241358
 </code></pre>
 <h2>Demonstrate Minimum Potential Impact of ML</h2>
 <p>Turning this into an ML task without any additional feature engineering, a company's average % difference from cash flow forecasted is 27% lower than the benchmark. </p>
@@ -1994,15 +2005,7 @@ from h2o.automl import H2OAutoML</p>
     max_mem_size=12  # in gigabytes
 )
 ```
-    Checking whether there is an H2O instance running at http://localhost:54321..... not found.
-    Attempting to start a local H2O server...
-      Java Version: java version "1.8.0_65"; Java(TM) SE Runtime Environment (build 1.8.0_65-b17); Java HotSpot(TM) 64-Bit Server VM (build 25.65-b01, mixed mode)
-      Starting server from /usr/local/lib/python3.11/site-packages/h2o/backend/bin/h2o.jar
-      Ice root: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmp66h76nh6
-      JVM stdout: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmp66h76nh6/h2o_lauren_started_from_python.out
-      JVM stderr: /var/folders/x7/h_27fz_13f3dly9n_3wywqzc0000gn/T/tmp66h76nh6/h2o_lauren_started_from_python.err
-      Server is running at http://127.0.0.1:54321
-    Connecting to H2O server at http://127.0.0.1:54321 ... successful.</p>
+    Checking whether there is an H2O instance running at http://localhost:54321. connected.</p>
 <style>
 
 #h2o-table-1.h2o-container {
@@ -2047,7 +2050,7 @@ from h2o.automl import H2OAutoML</p>
     <caption></caption>
     <thead></thead>
     <tbody><tr><td>H2O_cluster_uptime:</td>
-<td>02 secs</td></tr>
+<td>20 mins 07 secs</td></tr>
 <tr><td>H2O_cluster_timezone:</td>
 <td>America/New_York</td></tr>
 <tr><td>H2O_data_parsing_timezone:</td>
@@ -2055,13 +2058,13 @@ from h2o.automl import H2OAutoML</p>
 <tr><td>H2O_cluster_version:</td>
 <td>3.40.0.3</td></tr>
 <tr><td>H2O_cluster_version_age:</td>
-<td>26 days</td></tr>
+<td>27 days</td></tr>
 <tr><td>H2O_cluster_name:</td>
-<td>H2O_from_python_lauren_nkcdt9</td></tr>
+<td>H2O_from_python_lauren_b5vxra</td></tr>
 <tr><td>H2O_cluster_total_nodes:</td>
 <td>1</td></tr>
 <tr><td>H2O_cluster_free_memory:</td>
-<td>10.67 Gb</td></tr>
+<td>10.23 Gb</td></tr>
 <tr><td>H2O_cluster_total_cores:</td>
 <td>8</td></tr>
 <tr><td>H2O_cluster_allowed_cores:</td>
@@ -2069,7 +2072,7 @@ from h2o.automl import H2OAutoML</p>
 <tr><td>H2O_cluster_status:</td>
 <td>locked, healthy</td></tr>
 <tr><td>H2O_connection_url:</td>
-<td>http://127.0.0.1:54321</td></tr>
+<td>http://localhost:54321</td></tr>
 <tr><td>H2O_connection_proxy:</td>
 <td>{"http": null, "https": null}</td></tr>
 <tr><td>H2O_internal_security:</td>
@@ -2113,19 +2116,766 @@ aml_model = aml.train(x=x , y=y_numeric, training_frame=train, blending_frame=bl
                       weights_column='inv_company_weight') 
 ```
     AutoML progress: |
-    21:43:08.383: User specified a validation frame with cross-validation still enabled. Please note that the models will still be validated using cross-validation only, the validation frame will be used to provide purely informative validation metrics on the trained models.</p>
-<pre><code>█████████████████████████████████████████████████
-21:43:56.418: _weights_column param, All base models use weights_column="inv_company_weight" but Stacked Ensemble does not. If you want to use the same weights_column for the meta learner, please specify it as an argument in the h2o.stackedEnsemble call.
-
-██████████████| (done) 100%
+    05:26:52.524: User specified a validation frame with cross-validation still enabled. Please note that the models will still be validated using cross-validation only, the validation frame will be used to provide purely informative validation metrics on the trained models.</p>
+<pre><code>███████████████████████████████████████████████████████████████| (done) 100%
 </code></pre>
 <p><code>python
+aml_model</code></p>
+<pre style='margin: 1em 0 1em 0;'>Model Details
+=============
+H2OGeneralizedLinearEstimator : Generalized Linear Modeling
+Model Key: GLM_1_AutoML_8_20230502_52652
+</pre>
+<div style='margin: 1em 0 1em 0;'>
+<style>
+
+#h2o-table-2.h2o-container {
+  overflow-x: auto;
+}
+#h2o-table-2 .h2o-table {
+  /* width: 100%; */
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+#h2o-table-2 .h2o-table caption {
+  white-space: nowrap;
+  caption-side: top;
+  text-align: left;
+  /* margin-left: 1em; */
+  margin: 0;
+  font-size: larger;
+}
+#h2o-table-2 .h2o-table thead {
+  white-space: nowrap; 
+  position: sticky;
+  top: 0;
+  box-shadow: 0 -1px inset;
+}
+#h2o-table-2 .h2o-table tbody {
+  overflow: auto;
+}
+#h2o-table-2 .h2o-table th,
+#h2o-table-2 .h2o-table td {
+  text-align: right;
+  /* border: 1px solid; */
+}
+#h2o-table-2 .h2o-table tr:nth-child(even) {
+  /* background: #F5F5F5 */
+}
+
+</style>      
+<div id="h2o-table-2" class="h2o-container">
+  <table class="h2o-table">
+    <caption>GLM Model: summary</caption>
+    <thead><tr><th></th>
+<th>family</th>
+<th>link</th>
+<th>regularization</th>
+<th>lambda_search</th>
+<th>number_of_predictors_total</th>
+<th>number_of_active_predictors</th>
+<th>number_of_iterations</th>
+<th>training_frame</th></tr></thead>
+    <tbody><tr><td></td>
+<td>gaussian</td>
+<td>identity</td>
+<td>Ridge ( lambda = 0.01135 )</td>
+<td>nlambda = 30, lambda.max = 8.9468, lambda.min = 0.01135, lambda.1se = 0.3187</td>
+<td>23</td>
+<td>22</td>
+<td>15</td>
+<td>AutoML_8_20230502_52652_training_py_1_sid_a73b</td></tr></tbody>
+  </table>
+</div>
+</div>
+<div style='margin: 1em 0 1em 0;'><pre style='margin: 1em 0 1em 0;'>ModelMetricsRegressionGLM: glm
+** Reported on train data. **
+
+MSE: 0.09855147135364024
+RMSE: 0.31392908650464396
+MAE: 0.27001296933180996
+RMSLE: 0.20290359750299028
+Mean Residual Deviance: 0.09855147135364024
+R^2: 0.14962154184380394
+Null degrees of freedom: 64534
+Residual degrees of freedom: 64512
+Null deviance: 8524.75462489991
+Residual deviance: 7249.2676940822885
+AIC: 42097.0576996028</pre></div>
+<div style='margin: 1em 0 1em 0;'><pre style='margin: 1em 0 1em 0;'>ModelMetricsRegressionGLM: glm
+** Reported on validation data. **
+
+MSE: 0.11330271901116926
+RMSE: 0.3366046924972515
+MAE: 0.28267361482922493
+RMSLE: 0.23196744821676302
+Mean Residual Deviance: 0.11330271901116923
+R^2: 0.19177484447111337
+Null degrees of freedom: 28282
+Residual degrees of freedom: 28260
+Null deviance: 3139.092625782601
+Residual deviance: 2480.4626280593134
+AIC: 11476.063918629257</pre></div>
+<div style='margin: 1em 0 1em 0;'><pre style='margin: 1em 0 1em 0;'>ModelMetricsRegressionGLM: glm
+** Reported on cross-validation data. **
+
+MSE: 0.09927153159699303
+RMSE: 0.3150738510206663
+MAE: 0.2711872440308958
+RMSLE: 0.20366241767955673
+Mean Residual Deviance: 0.09927153159699303
+R^2: 0.14340830412029648
+Null degrees of freedom: 64534
+Residual degrees of freedom: 64512
+Null deviance: 8529.515806898276
+Residual deviance: 7302.234021101383
+AIC: 42566.86446966222</pre></div>
+<div style='margin: 1em 0 1em 0;'>
+<style>
+
+#h2o-table-3.h2o-container {
+  overflow-x: auto;
+}
+#h2o-table-3 .h2o-table {
+  /* width: 100%; */
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+#h2o-table-3 .h2o-table caption {
+  white-space: nowrap;
+  caption-side: top;
+  text-align: left;
+  /* margin-left: 1em; */
+  margin: 0;
+  font-size: larger;
+}
+#h2o-table-3 .h2o-table thead {
+  white-space: nowrap; 
+  position: sticky;
+  top: 0;
+  box-shadow: 0 -1px inset;
+}
+#h2o-table-3 .h2o-table tbody {
+  overflow: auto;
+}
+#h2o-table-3 .h2o-table th,
+#h2o-table-3 .h2o-table td {
+  text-align: right;
+  /* border: 1px solid; */
+}
+#h2o-table-3 .h2o-table tr:nth-child(even) {
+  /* background: #F5F5F5 */
+}
+
+</style>      
+<div id="h2o-table-3" class="h2o-container">
+  <table class="h2o-table">
+    <caption>Cross-Validation Metrics Summary: </caption>
+    <thead><tr><th></th>
+<th>mean</th>
+<th>sd</th>
+<th>cv_1_valid</th>
+<th>cv_2_valid</th>
+<th>cv_3_valid</th>
+<th>cv_4_valid</th>
+<th>cv_5_valid</th></tr></thead>
+    <tbody><tr><td>mae</td>
+<td>0.2716119</td>
+<td>0.0047114</td>
+<td>0.2761277</td>
+<td>0.2701687</td>
+<td>0.2699567</td>
+<td>0.2764966</td>
+<td>0.2653100</td></tr>
+<tr><td>mean_residual_deviance</td>
+<td>0.0991553</td>
+<td>0.0043829</td>
+<td>0.1051019</td>
+<td>0.0948988</td>
+<td>0.0981915</td>
+<td>0.1021212</td>
+<td>0.0954630</td></tr>
+<tr><td>mse</td>
+<td>0.0991553</td>
+<td>0.0043829</td>
+<td>0.1051019</td>
+<td>0.0948988</td>
+<td>0.0981915</td>
+<td>0.1021212</td>
+<td>0.0954630</td></tr>
+<tr><td>null_deviance</td>
+<td>1705.9032</td>
+<td>38.99787</td>
+<td>1750.4851</td>
+<td>1720.9568</td>
+<td>1652.1539</td>
+<td>1724.9015</td>
+<td>1681.0184</td></tr>
+<tr><td>r2</td>
+<td>0.1434323</td>
+<td>0.0420760</td>
+<td>0.1117915</td>
+<td>0.1928275</td>
+<td>0.1448958</td>
+<td>0.0922679</td>
+<td>0.1753791</td></tr>
+<tr><td>residual_deviance</td>
+<td>1459.4336</td>
+<td>89.53948</td>
+<td>1551.3582</td>
+<td>1387.4048</td>
+<td>1410.5394</td>
+<td>1562.3066</td>
+<td>1385.5588</td></tr>
+<tr><td>rmse</td>
+<td>0.3148282</td>
+<td>0.0069370</td>
+<td>0.3241943</td>
+<td>0.3080564</td>
+<td>0.3133553</td>
+<td>0.319564</td>
+<td>0.3089708</td></tr>
+<tr><td>rmsle</td>
+<td>0.2034792</td>
+<td>0.0059219</td>
+<td>0.2119546</td>
+<td>0.1975276</td>
+<td>0.2014174</td>
+<td>0.2070340</td>
+<td>0.1994625</td></tr></tbody>
+  </table>
+</div>
+</div>
+<div style='margin: 1em 0 1em 0;'>
+<style>
+
+#h2o-table-4.h2o-container {
+  overflow-x: auto;
+}
+#h2o-table-4 .h2o-table {
+  /* width: 100%; */
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+#h2o-table-4 .h2o-table caption {
+  white-space: nowrap;
+  caption-side: top;
+  text-align: left;
+  /* margin-left: 1em; */
+  margin: 0;
+  font-size: larger;
+}
+#h2o-table-4 .h2o-table thead {
+  white-space: nowrap; 
+  position: sticky;
+  top: 0;
+  box-shadow: 0 -1px inset;
+}
+#h2o-table-4 .h2o-table tbody {
+  overflow: auto;
+}
+#h2o-table-4 .h2o-table th,
+#h2o-table-4 .h2o-table td {
+  text-align: right;
+  /* border: 1px solid; */
+}
+#h2o-table-4 .h2o-table tr:nth-child(even) {
+  /* background: #F5F5F5 */
+}
+
+</style>      
+<div id="h2o-table-4" class="h2o-container">
+  <table class="h2o-table">
+    <caption>Scoring History: </caption>
+    <thead><tr><th></th>
+<th>timestamp</th>
+<th>duration</th>
+<th>iteration</th>
+<th>lambda</th>
+<th>predictors</th>
+<th>deviance_train</th>
+<th>deviance_test</th>
+<th>deviance_xval</th>
+<th>deviance_se</th>
+<th>alpha</th>
+<th>iterations</th>
+<th>training_rmse</th>
+<th>training_deviance</th>
+<th>training_mae</th>
+<th>training_r2</th>
+<th>validation_rmse</th>
+<th>validation_deviance</th>
+<th>validation_mae</th>
+<th>validation_r2</th></tr></thead>
+    <tbody><tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.000 sec</td>
+<td>1</td>
+<td>.89E1</td>
+<td>23</td>
+<td>0.1286473</td>
+<td>0.1077362</td>
+<td>0.1293519</td>
+<td>0.0014106</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.018 sec</td>
+<td>2</td>
+<td>.56E1</td>
+<td>23</td>
+<td>0.1270649</td>
+<td>0.1062071</td>
+<td>0.1279937</td>
+<td>0.0014681</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.032 sec</td>
+<td>3</td>
+<td>.35E1</td>
+<td>23</td>
+<td>0.1250635</td>
+<td>0.1042322</td>
+<td>0.1262128</td>
+<td>0.0015724</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.048 sec</td>
+<td>4</td>
+<td>.21E1</td>
+<td>23</td>
+<td>0.1227555</td>
+<td>0.1018825</td>
+<td>0.1240671</td>
+<td>0.0017400</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.057 sec</td>
+<td>5</td>
+<td>.13E1</td>
+<td>23</td>
+<td>0.1203718</td>
+<td>0.0993462</td>
+<td>0.1217431</td>
+<td>0.0019699</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.065 sec</td>
+<td>6</td>
+<td>.83E0</td>
+<td>23</td>
+<td>0.1181634</td>
+<td>0.0968524</td>
+<td>0.1194909</td>
+<td>0.0022347</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.073 sec</td>
+<td>7</td>
+<td>.51E0</td>
+<td>23</td>
+<td>0.1163051</td>
+<td>0.0945850</td>
+<td>0.1175276</td>
+<td>0.0024919</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.079 sec</td>
+<td>8</td>
+<td>.32E0</td>
+<td>23</td>
+<td>0.1148621</td>
+<td>0.0926539</td>
+<td>0.1159620</td>
+<td>0.0027064</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.084 sec</td>
+<td>9</td>
+<td>.2E0</td>
+<td>23</td>
+<td>0.1138241</td>
+<td>0.0910951</td>
+<td>0.1148101</td>
+<td>0.0028640</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.091 sec</td>
+<td>10</td>
+<td>.12E0</td>
+<td>23</td>
+<td>0.1131431</td>
+<td>0.0899086</td>
+<td>0.1140338</td>
+<td>0.0029674</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.099 sec</td>
+<td>11</td>
+<td>.76E-1</td>
+<td>23</td>
+<td>0.1127368</td>
+<td>0.0890560</td>
+<td>0.1135666</td>
+<td>0.0030308</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.103 sec</td>
+<td>12</td>
+<td>.47E-1</td>
+<td>23</td>
+<td>0.1125174</td>
+<td>0.0884752</td>
+<td>0.1133191</td>
+<td>0.0030663</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.108 sec</td>
+<td>13</td>
+<td>.29E-1</td>
+<td>23</td>
+<td>0.1124080</td>
+<td>0.0880954</td>
+<td>0.1132057</td>
+<td>0.0030853</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.113 sec</td>
+<td>14</td>
+<td>.18E-1</td>
+<td>23</td>
+<td>0.1123556</td>
+<td>0.0878533</td>
+<td>0.1131628</td>
+<td>0.0030931</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.121 sec</td>
+<td>15</td>
+<td>.11E-1</td>
+<td>23</td>
+<td>0.1123308</td>
+<td>0.0877015</td>
+<td>0.1131515</td>
+<td>0.0030962</td>
+<td>0.0</td>
+<td>None</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td></tr>
+<tr><td></td>
+<td>2023-05-02 05:27:12</td>
+<td> 0.128 sec</td>
+<td>16</td>
+<td>.71E-2</td>
+<td>23</td>
+<td>0.1123182</td>
+<td>0.0876077</td>
+<td>0.1131530</td>
+<td>0.0030958</td>
+<td>0.0</td>
+<td>16</td>
+<td>0.3139291</td>
+<td>0.0985515</td>
+<td>0.2700130</td>
+<td>0.1496215</td>
+<td>0.3366047</td>
+<td>0.1133027</td>
+<td>0.2826736</td>
+<td>0.1917748</td></tr></tbody>
+  </table>
+</div>
+</div>
+<div style='margin: 1em 0 1em 0;'>
+<style>
+
+#h2o-table-5.h2o-container {
+  overflow-x: auto;
+}
+#h2o-table-5 .h2o-table {
+  /* width: 100%; */
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+#h2o-table-5 .h2o-table caption {
+  white-space: nowrap;
+  caption-side: top;
+  text-align: left;
+  /* margin-left: 1em; */
+  margin: 0;
+  font-size: larger;
+}
+#h2o-table-5 .h2o-table thead {
+  white-space: nowrap; 
+  position: sticky;
+  top: 0;
+  box-shadow: 0 -1px inset;
+}
+#h2o-table-5 .h2o-table tbody {
+  overflow: auto;
+}
+#h2o-table-5 .h2o-table th,
+#h2o-table-5 .h2o-table td {
+  text-align: right;
+  /* border: 1px solid; */
+}
+#h2o-table-5 .h2o-table tr:nth-child(even) {
+  /* background: #F5F5F5 */
+}
+
+</style>      
+<div id="h2o-table-5" class="h2o-container">
+  <table class="h2o-table">
+    <caption>Variable Importances: </caption>
+    <thead><tr><th>variable</th>
+<th>relative_importance</th>
+<th>scaled_importance</th>
+<th>percentage</th></tr></thead>
+    <tbody><tr><td>due_per_month</td>
+<td>0.1383176</td>
+<td>1.0</td>
+<td>0.3295926</td></tr>
+<tr><td>months_open</td>
+<td>0.0651992</td>
+<td>0.4713732</td>
+<td>0.1553611</td></tr>
+<tr><td>prior_remaining_inv_pct</td>
+<td>0.0648467</td>
+<td>0.4688244</td>
+<td>0.1545210</td></tr>
+<tr><td>inv_pct_of_company_total</td>
+<td>0.0311926</td>
+<td>0.2255146</td>
+<td>0.0743280</td></tr>
+<tr><td>months_allowed</td>
+<td>0.0245701</td>
+<td>0.1776355</td>
+<td>0.0585473</td></tr>
+<tr><td>currency.GBP</td>
+<td>0.0232003</td>
+<td>0.1677318</td>
+<td>0.0552832</td></tr>
+<tr><td>currency.EUR</td>
+<td>0.0160391</td>
+<td>0.1159588</td>
+<td>0.0382192</td></tr>
+<tr><td>currency.SGD</td>
+<td>0.0108762</td>
+<td>0.0786317</td>
+<td>0.0259164</td></tr>
+<tr><td>amount_inv</td>
+<td>0.0078193</td>
+<td>0.0565318</td>
+<td>0.0186325</td></tr>
+<tr><td>currency.USD</td>
+<td>0.0059571</td>
+<td>0.0430680</td>
+<td>0.0141949</td></tr>
+<tr><td>---</td>
+<td>---</td>
+<td>---</td>
+<td>---</td></tr>
+<tr><td>currency.HKD</td>
+<td>0.0036670</td>
+<td>0.0265116</td>
+<td>0.0087380</td></tr>
+<tr><td>currency.TWD</td>
+<td>0.0034841</td>
+<td>0.0251890</td>
+<td>0.0083021</td></tr>
+<tr><td>currency.BRL</td>
+<td>0.0033996</td>
+<td>0.0245780</td>
+<td>0.0081007</td></tr>
+<tr><td>currency.AUD</td>
+<td>0.0029267</td>
+<td>0.0211590</td>
+<td>0.0069738</td></tr>
+<tr><td>currency.CHF</td>
+<td>0.0018275</td>
+<td>0.0132121</td>
+<td>0.0043546</td></tr>
+<tr><td>currency.RUB</td>
+<td>0.0012479</td>
+<td>0.0090217</td>
+<td>0.0029735</td></tr>
+<tr><td>currency.INR</td>
+<td>0.0000268</td>
+<td>0.0001937</td>
+<td>0.0000638</td></tr>
+<tr><td>currency.KRW</td>
+<td>0.0000104</td>
+<td>0.0000749</td>
+<td>0.0000247</td></tr>
+<tr><td>currency.HUF</td>
+<td>0.0000018</td>
+<td>0.0000128</td>
+<td>0.0000042</td></tr>
+<tr><td>currency.NZD</td>
+<td>0.0</td>
+<td>0.0</td>
+<td>0.0</td></tr></tbody>
+  </table>
+</div>
+<pre style='font-size: smaller; margin-bottom: 1em;'>[23 rows x 4 columns]</pre></div>
+<pre style="font-size: smaller; margin: 1em 0 0 0;">
+
+[tips]
+Use `model.explain()` to inspect the model.
+--
+Use `h2o.display.toggle_user_tips()` to switch on/off this section.</pre>
+
+<p><code>python
 aml_model.mae(),aml_model.mae(valid=True)</code></p>
-<pre><code>(0.19135958827893823, 0.22960736745400462)
+<pre><code>(0.27001296933180996, 0.28267361482922493)
 </code></pre>
 <p><code>python
 aml_model.r2(),aml_model.r2(valid=True)</code></p>
-<pre><code>(0.3485089627504697, 0.3039108944907669)
+<pre><code>(0.14962154184380394, 0.19177484447111337)
 </code></pre>
 <p><code>python
 validation_results = valid[[y_numeric,'inv_pct_of_company_total']].cbind(aml_model.predict(valid)).as_data_frame()
@@ -2141,7 +2891,7 @@ validation_results = validation_results.groupby("predict_month_collected", as_in
     ), on="predict_month_collected", suffixes=('_predict','')
 )
 validation_results</code>
-    stackedensemble prediction progress: |███████████████████████████████████████████| (done) 100%</p>
+    glm prediction progress: |███████████████████████████████████████████████████████| (done) 100%</p>
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -2169,48 +2919,90 @@ validation_results</code>
     <tr>
       <th>0</th>
       <td>1.0000</td>
-      <td>0.1901</td>
+      <td>0.1712</td>
       <td>0.1679</td>
     </tr>
     <tr>
       <th>1</th>
       <td>2.0000</td>
-      <td>0.1796</td>
+      <td>0.2200</td>
       <td>0.1126</td>
     </tr>
     <tr>
       <th>2</th>
       <td>3.0000</td>
-      <td>0.0199</td>
+      <td>0.0001</td>
       <td>0.0354</td>
     </tr>
     <tr>
       <th>3</th>
       <td>4.0000</td>
-      <td>0.0016</td>
+      <td>0.0000</td>
       <td>0.0099</td>
     </tr>
     <tr>
       <th>4</th>
-      <td>5.0000</td>
-      <td>0.0001</td>
-      <td>0.0029</td>
-    </tr>
-    <tr>
-      <th>5</th>
       <td>6.0000</td>
       <td>0.0000</td>
       <td>0.0017</td>
     </tr>
     <tr>
+      <th>5</th>
+      <td>7.0000</td>
+      <td>0.0007</td>
+      <td>0.0007</td>
+    </tr>
+    <tr>
       <th>6</th>
-      <td>12.0000</td>
+      <td>8.0000</td>
+      <td>0.0001</td>
+      <td>0.0001</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>9.0000</td>
+      <td>0.0006</td>
+      <td>0.0000</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>10.0000</td>
+      <td>0.0001</td>
+      <td>0.0006</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>13.0000</td>
       <td>0.0000</td>
       <td>0.0000</td>
     </tr>
     <tr>
-      <th>7</th>
+      <th>10</th>
       <td>15.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>17.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+    </tr>
+    <tr>
+      <th>12</th>
+      <td>18.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>21.0000</td>
+      <td>0.0004</td>
+      <td>0.0000</td>
+    </tr>
+    <tr>
+      <th>14</th>
+      <td>28.0000</td>
       <td>0.0000</td>
       <td>0.0000</td>
     </tr>
@@ -2218,13 +3010,24 @@ validation_results</code>
 </table>
 </div>
 
-<p><code>python
-ml_pct_diff = mean_absolute_error(validation_results.inv_pct_of_company_total, 
-                                  validation_results.inv_pct_of_company_total_predict)
-ml_pct_diff</code></p>
-<pre><code>0.01469855859528655
+<p>```python</p>
+<h1>means method</h1>
+<p>ml_pct_diff = mean_absolute_error(validation_results.inv_pct_of_company_total, 
+                                  validation_results.inv_pct_of_company_total_predict)\
+/validation_results.inv_pct_of_company_total_predict.mean()
+ml_pct_diff
+```</p>
+<pre><code>0.4049565765234922
+</code></pre>
+<p>```python</p>
+<h1>sums method</h1>
+<p>validation_results['abs_diff'] = (validation_results.inv_pct_of_company_total \
+                                  - validation_results.inv_pct_of_company_total_predict).abs()
+float(validation_results.abs_diff.sum()/validation_results.inv_pct_of_company_total_predict.sum())
+```</p>
+<pre><code>0.4049565765234922
 </code></pre>
 <p><code>python
-ml_pct_diff/benchmark_pct_diff - 1</code></p>
-<pre><code>-0.273496737127338
+ml_pct_diff, benchmark_pct_diff</code></p>
+<pre><code>(0.4049565765234922, 0.2047409978241358)
 </code></pre>
