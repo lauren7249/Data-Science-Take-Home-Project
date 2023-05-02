@@ -6,6 +6,9 @@ import pandas
 import neptune
 from neptune.types import File
 from neptune.utils import stringify_unsupported
+from predict_open_invoices import ID_COLUMNS
+from predict_open_invoices import DATA_FOLDER
+from predict_open_invoices.training import get_training_data_from_csvs, train_model
 NEPTUNE_PROJECT_NAME = "open-invoices-model"
 NEPTUNE_PROJECT = neptune.init_project(project=NEPTUNE_PROJECT_NAME, api_token=os.getenv('NEPTUNE_API_TOKEN'))
 NEPTUNE_PROJECT_ID = NEPTUNE_PROJECT['sys/id'].fetch()
@@ -15,9 +18,7 @@ try:
                                        name="Trained on CSV data.", api_token=os.getenv('NEPTUNE_API_TOKEN'))
 except neptune.exceptions.NeptuneModelKeyAlreadyExistsError:
     NEPTUNE_MODEL = neptune.init_model(with_id=f"{NEPTUNE_PROJECT_ID}-{NEPTUNE_MODEL_ID}", project=NEPTUNE_PROJECT_NAME)
-from predict_open_invoices import ID_COLUMNS
-from predict_open_invoices import DATA_FOLDER
-from predict_open_invoices.training import get_training_data_from_csvs, train_model
+
 
 def create_neptune_csv_model() -> neptune.Model:
     """Create base model. Only needs to be run once."""
@@ -64,13 +65,35 @@ def train_model_version(params: dict = dict(metric='mae', predictors=['due_per_m
     model = train_model(train, test, **params)
     neptune_model_version['algo'] = model.algo
     neptune_model_version['weights_column'] = model.actual_params['weights_column']['column_name']
+    neptune_model_version['feature_importance'].upload(File.as_html(model.varimp(use_pandas=True)))
     temp_dir = tempfile.TemporaryDirectory().name
-    h2o.save_model(model, path=temp_dir, force=True)
-    neptune_model_version['model_file'].upload_files(f"{temp_dir}/*")
+    model_path = h2o.save_model(model=model, path=temp_dir, force=True)
+    neptune_model_version['model_file'].upload(model_path)
     for metric in ast.literal_eval(neptune_model_version['ml_log_metrics'].fetch()):
         neptune_model_version[f'train_metric/{metric}'] = model.model_performance()[metric]
         neptune_model_version[f'test_metric/{metric}'] = model.model_performance(test)[metric]
 
 
+def get_best_model():
+    model_versions_table = NEPTUNE_MODEL.fetch_model_versions_table().to_pandas()
+    model_versions_table['avg_mae'] = model_versions_table[['train_metric/mae', 'test_metric/mae']].mean(axis=1)
+    best_model_version_id = model_versions_table.sort_values(by='avg_mae').iloc[0]['sys/id']
+    best_model_version = neptune.init_model_version(with_id=best_model_version_id, project=NEPTUNE_PROJECT_NAME)
+    temp_path = tempfile.NamedTemporaryFile()
+    best_model_version['model_file'].download(temp_path.file.name)
+    best_model = h2o.load_model(temp_path.file.name)
+    return best_model
+
+
 if __name__ == '__main__':
-    train_model_version()
+    pass
+    # create_neptune_csv_model()
+    # train_model_version()
+    # train_model_version(dict(metric='mae', y='collected_per_month', distribution='huber', max_runtime_secs=60,
+    #                          predictors=['due_per_month', 'currency', 'root_exchange_rate_value_inv', 'amount_inv',
+    #                                      'remaining_inv_pct', 'months_open', 'inv_pct_of_company_total']))
+    # train_model_version(dict(metric='mae', y='collected_per_month', distribution='huber', max_runtime_secs=60*5,
+    #                          predictors=['due_per_month', 'currency', 'root_exchange_rate_value_inv', 'amount_inv',
+    #                                      'remaining_inv_pct', 'months_open', 'inv_pct_of_company_total']))
+    # model = get_best_model()
+
