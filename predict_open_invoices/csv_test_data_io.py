@@ -1,6 +1,5 @@
 import pandas
-from predict_open_invoices import ID_COLUMNS
-DATA_FOLDER = '../data_analysis/data'
+from predict_open_invoices import ID_COLUMNS, DATA_FOLDER
 # truncate datetimes to dates
 DATE_FORMAT = '%Y-%m-%d'
 ID_COLUMN_TYPES = dict(zip(ID_COLUMNS, [str] * len(ID_COLUMNS)))

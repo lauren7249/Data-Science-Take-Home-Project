@@ -91,7 +91,6 @@ def post_process_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> (
 def get_h2o_training_data(feature_data: pandas.DataFrame) -> OrderedDict[str: h2o.H2OFrame]:
     """Given a set of featurized invoices, return h2o data frames split sequentially into training, testing, and
     validation based on forecast date, weighted by the invoice amount's percentage of the client company's total."""
-    id_columns_h2o = [col for col in ID_COLUMNS if col in feature_data.columns]
     normalized_feature_data = normalize_by_company(feature_data)
     normalized_feature_data['inv_company_weight'] = normalized_feature_data.inv_pct_of_company_total \
         * normalized_feature_data.invoice_id.nunique() / normalized_feature_data.company_id.nunique()
@@ -103,7 +102,8 @@ def get_h2o_training_data(feature_data: pandas.DataFrame) -> OrderedDict[str: h2
         / (months_to_final_state + 1)
     assert (normalized_feature_data.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
     normalized_feature_data['forecast_date_fold'] = (normalized_feature_data.forecast_date.rank(pct=True) * 6).round()
-    invoices_to_model_h2o = h2o.H2OFrame(normalized_feature_data,
+    id_columns_h2o = [col for col in ID_COLUMNS if col in feature_data.columns]
+    invoices_to_model_h2o = h2o.H2OFrame(normalized_feature_data.select_dtypes(exclude='datetime'),
                                          column_types=dict(zip(id_columns_h2o, ["string"] * len(id_columns_h2o))))
     h2o_frames = OrderedDict()
     # time-based split: cross-validating on future data relative to what is being trained
@@ -140,7 +140,7 @@ def train_model(train: h2o.H2OFrame, test: h2o.H2OFrame, predictors: list[str] =
     """Given training and testing h2oframes, list of predictors, outcome variable, outcome distribution,
     and ML metric, return a trained H2O model."""
     # hyperparameter tuning is addressed by using AutoML and specifying sort and stopping metrics.
-    aml = H2OAutoML(max_runtime_secs=max_runtime_secs, distribution=distribution,
+    aml = H2OAutoML(max_runtime_secs=max_runtime_secs, distribution=distribution, exclude_algos=['StackedEnsemble'],
                     sort_metric=metric, stopping_metric=metric, stopping_tolerance=0.01)
     aml_model = aml.train(training_frame=train, blending_frame=test, x=predictors, y=y,
                           weights_column='inv_company_weight')
@@ -148,24 +148,20 @@ def train_model(train: h2o.H2OFrame, test: h2o.H2OFrame, predictors: list[str] =
 
 
 def test_training_on_csvs(metric: str) -> \
-        (h2o.estimators.H2OEstimator, h2o.estimators.H2OEstimator, OrderedDict[str: h2o.H2OFrame], pandas.DataFrame):
+        (h2o.estimators.H2OEstimator, OrderedDict[str: h2o.H2OFrame], pandas.DataFrame):
     h2o_frames, filter_stats_csv = get_training_data_from_csvs()
     params = dict(metric=metric, y='collected_per_month', distribution='huber', predictors=['due_per_month'],
                   max_runtime_secs=60)
     uni_variate_model = train_model(h2o_frames['train'], h2o_frames['test'], **params)
-    params['predictors'] = ['months_allowed', 'amount_inv', 'currency', 'months_open', 'due_per_month',
-                            'remaining_inv_pct']
-    multivariate_model = train_model(h2o_frames['train'], h2o_frames['test'], **params)
-    return uni_variate_model, multivariate_model, h2o_frames, filter_stats_csv
+    return uni_variate_model, h2o_frames, filter_stats_csv
 
 
 if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
     ml_metric = 'mae'
-    baseline_model, trained_model, split_h2o_frames, training_filter_stats = test_training_on_csvs(ml_metric)
-    h2o.save_model(trained_model, path='trained_models', force=True)
+    baseline_model, split_h2o_frames, training_filter_stats = test_training_on_csvs(ml_metric)
+    h2o.save_model(baseline_model, path='trained_models', force=True)
     print(training_filter_stats)
     for split in split_h2o_frames.keys():
         h2o_frame = split_h2o_frames[split]
-        print(f"Baseline model {ml_metric} on {split} data: {baseline_model.model_performance(h2o_frame)[ml_metric]}\t"
-              f"Trained model {ml_metric} on {split} data: {trained_model.model_performance(h2o_frame)[ml_metric]}")
+        print(f"Baseline model {ml_metric} on {split} data: {baseline_model.model_performance(h2o_frame)[ml_metric]}")
