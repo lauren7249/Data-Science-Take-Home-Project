@@ -56,16 +56,12 @@ TRAIN_DF, TEST_DF, VALID_DF = get_data_splits(['train', 'test', 'validation'])
 TRAIN_H2O_FRAME, TEST_H2O_FRAME = get_h2o_frame(TRAIN_DF), get_h2o_frame(TEST_DF)
 
 
-def get_monthly_forecast_error(df: pandas.DataFrame, h2o_model: h2o.estimators.H2OEstimator,
-                               y: str = 'collected_per_month') -> float:
-    """Given a slice of data, outcome variable, and trained model, calculate the mean absolute percentage diff between
+def get_monthly_forecast_error(df: pandas.DataFrame, h2o_model: h2o.estimators.H2OEstimator) -> float:
+    """Given a slice of historical data and trained model, calculate the mean absolute percentage diff between
      monthly amount collected (normalized by company) and monthly amount forecasted for collection."""
     predictions = predict(df, h2o_model)
     results = df[['collected_per_month', 'month_collected', 'inv_pct_of_company_total']].copy()
-    if y == 'collected_per_month':
-        results["predict_month_collected"] = (1 / predictions).replace(numpy.inf, None).round(0)
-    else:
-        results['predict_month_collected'] = predictions.round(0).astype(int)
+    results['predicted_month_collected'] = predictions
     results = results.groupby("predict_month_collected", as_index=False).inv_pct_of_company_total.sum().merge(
         results.groupby("month_collected", as_index=False).inv_pct_of_company_total.sum()
         .rename(columns={"month_collected": "predict_month_collected"}), on="predict_month_collected",
@@ -134,4 +130,4 @@ def optuna_objective(trial):
 if __name__ == '__main__':
     pandas.set_option('expand_frame_repr', False)
     study = optuna.create_study(direction='minimize')
-    study.optimize(optuna_objective, n_trials=3)
+    study.optimize(optuna_objective, n_trials=1)

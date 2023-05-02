@@ -1,5 +1,6 @@
 import os
 import tempfile
+import numpy
 import h2o
 import pandas
 import neptune
@@ -32,7 +33,12 @@ def _get_best_model(sort_column: str = 'monthly_mape_test') -> h2o.estimators.H2
 def predict(invoice_features: pandas.DataFrame, model: h2o.estimators.H2OEstimator) -> pandas.Series:
     """Run inference on set of invoices and payments summarized up to the point in time being forecasted"""
     invoice_features_h2o = h2o.H2OFrame(invoice_features)
-    return model.predict(invoice_features_h2o).as_data_frame()['predict']
+    predictions = model.predict(invoice_features_h2o).as_data_frame()['predict']
+    # predictions represent collection rates
+    if predictions.min() == 0:
+        return (1 / predictions).replace(numpy.inf, None).round(0)
+    # predictions represent future month collected
+    return predictions.round(0).astype(int)
 
 
 def _test_prediction_on_open_invoices(invoices_raw: pandas.DataFrame, payments_raw: pandas.DataFrame) \
