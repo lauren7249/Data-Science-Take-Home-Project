@@ -13,6 +13,8 @@ NEPTUNE_PROJECT_ID = NEPTUNE_PROJECT['sys/id'].fetch()
 
 
 def get_best_model(sort_column: str = 'monthly_mape_test') -> h2o.estimators.H2OEstimator:
+    """Pick the model version from neptune that minimizes the mean absolute percentage diff between
+     monthly amount collected (normalized by company) and monthly amount forecasted on test data."""
     neptune_model = neptune.init_model(with_id=f"{NEPTUNE_PROJECT_ID}-{NEPTUNE_MODEL_ID}", project=NEPTUNE_PROJECT_NAME)
     neptune_model.sync()
     model_versions_table = neptune_model.fetch_model_versions_table().to_pandas()
@@ -28,13 +30,14 @@ def get_best_model(sort_column: str = 'monthly_mape_test') -> h2o.estimators.H2O
 
 
 def predict(invoice_features: pandas.DataFrame, model: h2o.estimators.H2OEstimator) -> pandas.Series:
+    """Run inference on set of invoices and payments summarized up to the point in time being forecasted"""
     invoice_features_h2o = h2o.H2OFrame(invoice_features)
     return model.predict(invoice_features_h2o).as_data_frame()['predict']
 
 
 def test_prediction_on_open_invoices(invoices_raw: pandas.DataFrame, payments_raw: pandas.DataFrame) \
         -> pandas.DataFrame:
-    """Given raw input datasets, return invoices with feature data and predictions"""
+    """Given raw input datasets, return OPEN invoices with feature data and predictions"""
     invoices_with_payments, preprocess_filter_stats = preprocess_invoices_with_payments(invoices_raw, payments_raw)
     open_invoices_with_payments = invoices_with_payments.query("status=='OPEN'").copy()
     open_invoices_with_payments['forecast_date'] = payments_raw.transaction_date.max()

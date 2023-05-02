@@ -58,7 +58,7 @@ TRAIN_H2O_FRAME, TEST_H2O_FRAME = get_h2o_frame(TRAIN_DF), get_h2o_frame(TEST_DF
 def get_monthly_forecast_error(df: pandas.DataFrame, h2o_model: h2o.estimators.H2OEstimator,
                                y: str = 'collected_per_month') -> float:
     """Given a slice of data, outcome variable, and trained model, calculate the mean absolute percentage diff between
-     monthly amount collected (normalized by company) and monthly amount forecasted for collection.."""
+     monthly amount collected (normalized by company) and monthly amount forecasted for collection."""
     predictions = predict(df, h2o_model)
     results = df[['collected_per_month', 'month_collected', 'inv_pct_of_company_total']].copy()
     if y == 'collected_per_month':
