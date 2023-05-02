@@ -1,5 +1,7 @@
 import pandas
 from collections import OrderedDict
+import h2o
+from predict_open_invoices import ID_COLUMNS
 
 
 def months_between(start_date: pandas.Series, end_date: pandas.Series) -> int:
@@ -25,3 +27,10 @@ def apply_filters(filters: OrderedDict, apply_to_df: pandas.DataFrame) -> (panda
                       1 - filtered_data.__len__() / rows_applied_to]
         filter_stats.loc[step_num] = step_stats
     return filtered_data, filter_stats
+
+
+def get_h2o_frame(df: pandas.DataFrame) -> h2o.H2OFrame:
+    h2o.init(nthreads=-1, max_mem_size=12)
+    id_columns_h2o = [col for col in ID_COLUMNS if col in df.columns]
+    return h2o.H2OFrame(df.select_dtypes(exclude='datetime'),
+                        column_types=dict(zip(id_columns_h2o, ["string"] * len(id_columns_h2o))))
