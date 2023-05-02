@@ -31,7 +31,8 @@ def _get_best_model(sort_column: str = 'monthly_mape_test') -> h2o.estimators.H2
 
 
 def predict(invoice_features: pandas.DataFrame, model: h2o.estimators.H2OEstimator) -> pandas.Series:
-    """Run inference on set of invoices and payments summarized up to the point in time being forecasted"""
+    """Predict month collected relative to forecast date on set of invoices and payments summarized up to the point
+    in time being forecasted"""
     invoice_features_h2o = h2o.H2OFrame(invoice_features)
     predictions = model.predict(invoice_features_h2o).as_data_frame()['predict']
     # predictions represent collection rates
