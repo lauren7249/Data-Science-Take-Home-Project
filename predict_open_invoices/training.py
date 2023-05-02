@@ -84,6 +84,7 @@ def post_process_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> (
     filters['Opened outside of collections date range: could be missing payments'] = \
         invoices[((invoices.invoice_date < invoices.collected_date.min()) |
                   (invoices.invoice_date > invoices.collected_date.max()))]
+    filters['NZD currency: not enough rows'] = invoices.query("currency=='NZD'")
     data, filter_stats = apply_filters(filters, invoices)
     return data, filter_stats
 
@@ -97,9 +98,10 @@ def get_h2o_training_data(feature_data: pandas.DataFrame) -> OrderedDict[str: h2
     months_to_final_state = months_between(
         normalized_feature_data.forecast_date,
         normalized_feature_data.collected_date.fillna(normalized_feature_data.final_date_open))
+    normalized_feature_data['month_collected'] = months_to_final_state + 1
     normalized_feature_data['collected_per_month'] = \
         (normalized_feature_data.remaining_inv_pct - normalized_feature_data.final_remaining_inv_pct) \
-        / (months_to_final_state + 1)
+        / normalized_feature_data.month_collected
     assert (normalized_feature_data.collected_per_month.isnull()).sum() == 0, 'Collection rate not populated'
     normalized_feature_data['forecast_date_fold'] = (normalized_feature_data.forecast_date.rank(pct=True) * 6).round()
     id_columns_h2o = [col for col in ID_COLUMNS if col in feature_data.columns]
