@@ -82,7 +82,7 @@ def train_model_version(params: dict = dict(metric='mae', predictors=['due_per_m
     neptune_model_version['ml_sort_metric'] = params['metric']
     neptune_model_version['ml_log_metrics'] = stringify_unsupported(['r2', 'mae', 'rmsle'])
     neptune_model_version['nfolds'] = params['nfolds']
-    neptune_model_version['stopping_tolerance'] = params['stopping_tolerance']
+    #neptune_model_version['stopping_tolerance'] = params['stopping_tolerance']
     train, test, valid = get_data_splits(['train', 'test', 'validation'])
     h2o_model = train_model(train, test, **params)
     neptune_model_version['monthly_mape_train'] = get_monthly_forecast_error(train, h2o_model, y=params['y'])
@@ -104,29 +104,24 @@ def train_model_version(params: dict = dict(metric='mae', predictors=['due_per_m
     return mape_test
 
 
-def get_best_model():
-    NEPTUNE_MODEL.sync()
-    model_versions_table = NEPTUNE_MODEL.fetch_model_versions_table().to_pandas()
-    best_model_version_id = model_versions_table.sort_values(by='monthly_mape_test').iloc[0]['sys/id']
-    best_model_version = neptune.init_model_version(with_id=best_model_version_id, project=NEPTUNE_PROJECT_NAME)
-    temp_path = tempfile.NamedTemporaryFile().file.name
-    best_model_version['model_file'].download(temp_path)
-    best_model = h2o.load_model(temp_path)
-    return best_model
-
-
 def optuna_objective(trial):
-    y = trial.suggest_categorical('y', ['collected_per_month', 'month_collected'])
+    #y = trial.suggest_categorical('y', ['collected_per_month', 'month_collected'])
+    # predictors = ['due_per_month', 'root_exchange_rate_value_inv', 'amount_inv',
+    #               'remaining_inv_pct', 'months_open']
+    y = 'collected_per_month'
+    predictors = ['months_allowed', 'months_open', 'remaining_inv_pct', 'amount_inv']
+
+    predictors += ['due_per_month'] if y == 'collected_per_month' else ['month_due']
     params = \
-        {'y': y, 'predictors': ['due_per_month', 'root_exchange_rate_value_inv', 'amount_inv',
-                                'remaining_inv_pct', 'months_open'],
-         'distribution': 'poisson' if y == 'month_collected' else trial.suggest_categorical('distribution',
-                                                                                          ('huber', 'gaussian')),
+        {'y': y, 'predictors': predictors, 'metric': 'mae',
+         'distribution': 'poisson' if y == 'month_collected' else 'gaussian',
+         #'exclude_algos': [],
          'exclude_algos': ast.literal_eval(trial.suggest_categorical('exclude_algos', ("[]", "['StackedEnsemble']"))),
-         'metric': trial.suggest_categorical('metric', ('mae', 'rmsle')),
+         #'metric': trial.suggest_categorical('metric', ('mae', 'rmsle')),
          'nfolds': trial.suggest_categorical('nfolds', [-1, 0, 2, 4, 5, 6]),
-         'max_runtime_secs': trial.suggest_int('max_runtime_secs', 60, 60 * 5),
-         'stopping_tolerance': trial.suggest_float('stopping_tolerance', 0.003, 0.03)}
+         'max_runtime_secs': trial.suggest_int('max_runtime_secs', 60 * 3, 60 * 7),
+          #'stopping_tolerance': trial.suggest_float('stopping_tolerance', 0.003, 0.03)
+         }
     metric_to_minimize = train_model_version(params)
     return metric_to_minimize
 
@@ -135,5 +130,5 @@ if __name__ == '__main__':
     pandas.set_option('expand_frame_repr', False)
     create_neptune_csv_model()
     study = optuna.create_study(direction='minimize')
-    study.optimize(optuna_objective, n_trials=10)
+    study.optimize(optuna_objective, n_trials=3)
     model = get_best_model()
