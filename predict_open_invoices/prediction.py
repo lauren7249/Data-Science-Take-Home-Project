@@ -32,7 +32,7 @@ def get_best_model(sort_column: str = 'monthly_mape_test') -> h2o.estimators.H2O
     return best_model
 
 
-def predict_collection_date(invoice_features: pandas.DataFrame, model: h2o.estimators.H2OEstimator) -> pandas.Series:
+def predict(invoice_features: pandas.DataFrame, model: h2o.estimators.H2OEstimator) -> pandas.Series:
     invoice_features_h2o = h2o.H2OFrame(invoice_features)
     return model.predict(invoice_features_h2o).as_data_frame()['predict']
 
@@ -46,7 +46,7 @@ def test_prediction_on_open_invoices(invoices_raw: pandas.DataFrame, payments_ra
     open_invoices_feature_data = feature_engineering(open_invoices_with_payments.query("forecast_date>=invoice_date"))
     assert open_invoices_feature_data.invoice_id.value_counts().max() == 1, 'Duplicates per open invoice'
     model = get_best_model()
-    return predict_collection_date(open_invoices_feature_data, model)
+    return predict(open_invoices_feature_data, model)
 
 
 if __name__ == "__main__":
