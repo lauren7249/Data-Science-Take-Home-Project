@@ -1,4 +1,4 @@
-from _collections import OrderedDict
+from collections import OrderedDict
 import pandas
 import random
 import numpy
@@ -164,7 +164,6 @@ if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
     ml_metric = 'mae'
     baseline_model, split_h2o_frames, training_filter_stats = test_training_on_csvs(ml_metric)
-    h2o.save_model(baseline_model, path='trained_models', force=True)
     print(training_filter_stats)
     for split in split_h2o_frames.keys():
         h2o_frame = split_h2o_frames[split]
