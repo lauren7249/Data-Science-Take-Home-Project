@@ -22,7 +22,7 @@ except neptune.exceptions.NeptuneModelKeyAlreadyExistsError:
 
 
 def create_neptune_csv_model() -> neptune.Model:
-    """Create base model. Only needs to be run once."""
+    """Create base neptune model from CSV data. Only needs to be run once."""
     url_to_project_brief = 'https://github.com/lauren7249/Data-Science-Take-Home-Project'
     NEPTUNE_PROJECT["general/brief"] = url_to_project_brief
     NEPTUNE_PROJECT["general/eda_html_for_download"].upload("../data_analysis/eda.html")
