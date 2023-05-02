@@ -136,12 +136,13 @@ def get_training_data_from_csvs() -> (OrderedDict[str: h2o.H2OFrame], pandas.Dat
 
 def train_model(train: h2o.H2OFrame, test: h2o.H2OFrame, predictors: list[str] = ['due_per_month'],
                 metric: str = 'mae', y: str = 'collected_per_month', distribution: str = 'huber',
-                max_runtime_secs: int = 60) -> h2o.estimators.H2OEstimator:
+                max_runtime_secs: int = 60, exclude_algos: list[str] = ['StackedEnsemble'], nfolds: int = 0,
+                stopping_tolerance: float = 0.01) -> h2o.estimators.H2OEstimator:
     """Given training and testing h2oframes, list of predictors, outcome variable, outcome distribution,
     and ML metric, return a trained H2O model."""
     # hyperparameter tuning is addressed by using AutoML and specifying sort and stopping metrics.
-    aml = H2OAutoML(max_runtime_secs=max_runtime_secs, distribution=distribution, exclude_algos=['StackedEnsemble'],
-                    sort_metric=metric, stopping_metric=metric, stopping_tolerance=0.01)
+    aml = H2OAutoML(max_runtime_secs=max_runtime_secs, distribution=distribution, exclude_algos=exclude_algos,
+                    sort_metric=metric, stopping_metric=metric, stopping_tolerance=stopping_tolerance, nfolds=nfolds)
     aml_model = aml.train(training_frame=train, blending_frame=test, x=predictors, y=y,
                           weights_column='inv_company_weight')
     return aml_model
