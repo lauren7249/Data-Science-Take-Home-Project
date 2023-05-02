@@ -46,9 +46,9 @@ def get_data_splits(keys: list[str] = ['train', 'test']) -> list[h2o.H2OFrame]:
     h2o.init(nthreads=-1, max_mem_size=12)
     h2o_frames = []
     for key in keys:
-        temp_path = tempfile.NamedTemporaryFile()
-        NEPTUNE_MODEL[f'data/{key}'].download(temp_path.file.name)
-        df = pandas.read_pickle(temp_path.file.name)
+        temp_path = tempfile.NamedTemporaryFile().file.name
+        NEPTUNE_MODEL[f'data/{key}'].download(temp_path)
+        df = pandas.read_pickle(temp_path)
         id_columns_h2o = [col for col in ID_COLUMNS if col in df.columns]
         h2o_frames.append(h2o.H2OFrame(df, column_types=dict(zip(id_columns_h2o, ["string"] * len(id_columns_h2o)))))
     return h2o_frames
@@ -60,7 +60,11 @@ def get_monthly_forecast_error(h2o_frame: h2o.H2OFrame, model: h2o.estimators.H2
     results.rename(columns={"predict": f"predict_{y}"}, inplace=True)
     if results[y].between(0, 1).min():
         results[f"{y}_inverse"] = (1 / results[y]).replace(numpy.inf, numpy.nan).round(0)
-        results[f"predict_{y}_inverse"] = (1 / results[f"predict_{y}"]).replace(numpy.inf, None).round(0)
+        try:
+            results[f"predict_{y}_inverse"] = (1 / results[f"predict_{y}"]).replace(numpy.inf, numpy.nan).round(0)
+        except:
+            import pdb
+            pdb.set_trace()
     results = results.groupby(f"predict_{y}_inverse", as_index=False).inv_pct_of_company_total.sum().merge(
         results.groupby(f"{y}_inverse", as_index=False).inv_pct_of_company_total.sum().rename(
             columns={f"{y}_inverse": f"predict_{y}_inverse"}), on=f"predict_{y}_inverse", suffixes=('_predict', ''))
@@ -78,6 +82,8 @@ def train_model_version(params: dict = dict(metric='mae', predictors=['due_per_m
     neptune_model_version['max_runtime_secs'] = params['max_runtime_secs']
     neptune_model_version['ml_sort_metric'] = params['metric']
     neptune_model_version['ml_log_metrics'] = stringify_unsupported(['r2', 'mae', 'rmsle'])
+    neptune_model_version['nfolds'] = params['nfolds']
+    neptune_model_version['stopping_tolerance'] = params['stopping_tolerance']
     train, test = get_data_splits(['train', 'test'])
     model = train_model(train, test, **params)
     neptune_model_version['monthly_mape_train'] = get_monthly_forecast_error(train, model, y=params['y'])
@@ -86,7 +92,7 @@ def train_model_version(params: dict = dict(metric='mae', predictors=['due_per_m
     weights_column, varimp = model.actual_params['weights_column'], model.varimp(use_pandas=True)
     if weights_column:
         neptune_model_version['weights_column'] = weights_column['column_name']
-    if varimp:
+    if varimp is not None:
         neptune_model_version['feature_importance'].upload(File.as_html(varimp))
     temp_dir = tempfile.TemporaryDirectory().name
     model_path = h2o.save_model(model=model, path=temp_dir, force=True)
@@ -98,23 +104,27 @@ def train_model_version(params: dict = dict(metric='mae', predictors=['due_per_m
 
 
 def get_best_model():
+    NEPTUNE_MODEL.sync()
     model_versions_table = NEPTUNE_MODEL.fetch_model_versions_table().to_pandas()
     best_model_version_id = model_versions_table.sort_values(by='monthly_mape_test').iloc[0]['sys/id']
     best_model_version = neptune.init_model_version(with_id=best_model_version_id, project=NEPTUNE_PROJECT_NAME)
-    temp_path = tempfile.NamedTemporaryFile()
-    best_model_version['model_file'].download(temp_path.file.name)
-    best_model = h2o.load_model(temp_path.file.name)
+    temp_path = tempfile.NamedTemporaryFile().file.name
+    best_model_version['model_file'].download(temp_path)
+    best_model = h2o.load_model(temp_path)
     return best_model
 
 
 def optuna_objective(trial):
-    params = {'predictors': ['due_per_month', 'currency', 'root_exchange_rate_value_inv', 'amount_inv',
-                             'remaining_inv_pct', 'months_open', 'inv_pct_of_company_total'],
-              'y': 'collected_per_month',
-              'exclude_algos': trial.suggest_categorical('exclude_algos', [[], ['StackedEnsemble']]),
-              'distribution': trial.suggest_categorical('distribution', ['huber', 'laplace', 'gamma']),
-              'metric': trial.suggest_categorical('metric', ['mae', 'r2', 'rmsle']),
-              'max_runtime_secs': trial.suggest_loguniform('max_runtime_secs', 30, 60 * 5)}
+    params = {
+        'predictors': ['due_per_month', 'currency', 'root_exchange_rate_value_inv', 'amount_inv', 'remaining_inv_pct',
+                       'months_open', 'inv_pct_of_company_total'],
+        'y': 'collected_per_month',
+        'exclude_algos': ast.literal_eval(trial.suggest_categorical('exclude_algos', ("[]", "['StackedEnsemble']"))),
+        'distribution': trial.suggest_categorical('distribution', ('huber', 'gamma')),
+        'metric': trial.suggest_categorical('metric', ('mae', 'r2', 'rmsle')),
+        'nfolds': trial.suggest_categorical('nfolds', [-1, 0, 2, 4]),
+        'max_runtime_secs': trial.suggest_int('max_runtime_secs', 30, 60 * 5),
+        'stopping_tolerance': trial.suggest_float('stopping_tolerance', 0.001, 0.02)}
     return train_model_version(params)
 
 

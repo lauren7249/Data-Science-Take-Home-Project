@@ -140,9 +140,10 @@ def train_model(train: h2o.H2OFrame, test: h2o.H2OFrame, predictors: list[str] =
                 stopping_tolerance: float = 0.01) -> h2o.estimators.H2OEstimator:
     """Given training and testing h2oframes, list of predictors, outcome variable, outcome distribution,
     and ML metric, return a trained H2O model."""
-    # hyperparameter tuning is addressed by using AutoML and specifying sort and stopping metrics.
+    # some hyperparameter tuning options are addressed by using AutoML and specifying sort and stopping metrics.
     aml = H2OAutoML(max_runtime_secs=max_runtime_secs, distribution=distribution, exclude_algos=exclude_algos,
-                    sort_metric=metric, stopping_metric=metric, stopping_tolerance=stopping_tolerance, nfolds=nfolds)
+                    sort_metric=metric, stopping_metric=metric if metric != 'r2' else 'mae',
+                    stopping_tolerance=stopping_tolerance, nfolds=nfolds)
     aml_model = aml.train(training_frame=train, blending_frame=test, x=predictors, y=y,
                           weights_column='inv_company_weight')
     return aml_model
