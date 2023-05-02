@@ -4,7 +4,8 @@ from predict_open_invoices.csv_test_data_io import get_csv_test_data
 from predict_open_invoices.pre_processing import preprocess_invoices_with_payments
 
 
-def add_date_quantities(invoice_point_in_time: pandas.DataFrame):
+def _add_date_quantities(invoice_point_in_time: pandas.DataFrame):
+    """Sub-section of feature engineering"""
     invoice_point_in_time['months_open'] = (
             months_between(invoice_point_in_time.invoice_date, invoice_point_in_time.forecast_date
                            )+1).clip(upper=13, lower=1)
@@ -31,7 +32,7 @@ def feature_engineering(invoices_with_payments: pandas.DataFrame) -> pandas.Data
     invoice_point_in_time = invoice_begin_state.merge(last_prior_payment_state, on="invoice_id", how="left",
                                                       suffixes=('', '_prior'))
     assert invoice_point_in_time.invoice_id.value_counts().max() == 1, 'Inputs not preprocessed as expected'
-    invoice_point_in_time = add_date_quantities(invoice_point_in_time)
+    invoice_point_in_time = _add_date_quantities(invoice_point_in_time)
     assert invoice_point_in_time.invoice_id.nunique() == invoices_with_payments.invoice_id.nunique(), \
         'Invoices dropped in feature engineering'
     invoice_point_in_time['remaining_inv_pct'] = 1 - invoice_point_in_time.amount_pmt_pct_cum.fillna(0)
@@ -39,6 +40,7 @@ def feature_engineering(invoices_with_payments: pandas.DataFrame) -> pandas.Data
 
 
 def test_feature_engineering():
+    """Test feature engineering on CSV test data, using the date the invoice was opened as the date forecasted."""
     invoices, payments = get_csv_test_data()
     invoices_with_payments, preprocess_filter_stats = preprocess_invoices_with_payments(invoices, payments)
     # test using the invoice date as an arbitrary point in time to generate the data.

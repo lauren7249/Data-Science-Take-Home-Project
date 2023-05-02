@@ -12,7 +12,7 @@ NEPTUNE_PROJECT = neptune.init_project(project=NEPTUNE_PROJECT_NAME, api_token=o
 NEPTUNE_PROJECT_ID = NEPTUNE_PROJECT['sys/id'].fetch()
 
 
-def get_best_model(sort_column: str = 'monthly_mape_test') -> h2o.estimators.H2OEstimator:
+def _get_best_model(sort_column: str = 'monthly_mape_test') -> h2o.estimators.H2OEstimator:
     """Pick the model version from neptune that minimizes the mean absolute percentage diff between
      monthly amount collected (normalized by company) and monthly amount forecasted on test data."""
     neptune_model = neptune.init_model(with_id=f"{NEPTUNE_PROJECT_ID}-{NEPTUNE_MODEL_ID}", project=NEPTUNE_PROJECT_NAME)
@@ -35,7 +35,7 @@ def predict(invoice_features: pandas.DataFrame, model: h2o.estimators.H2OEstimat
     return model.predict(invoice_features_h2o).as_data_frame()['predict']
 
 
-def test_prediction_on_open_invoices(invoices_raw: pandas.DataFrame, payments_raw: pandas.DataFrame) \
+def _test_prediction_on_open_invoices(invoices_raw: pandas.DataFrame, payments_raw: pandas.DataFrame) \
         -> pandas.DataFrame:
     """Given raw input datasets, return OPEN invoices with feature data and predictions"""
     invoices_with_payments, preprocess_filter_stats = preprocess_invoices_with_payments(invoices_raw, payments_raw)
@@ -43,13 +43,13 @@ def test_prediction_on_open_invoices(invoices_raw: pandas.DataFrame, payments_ra
     open_invoices_with_payments['forecast_date'] = payments_raw.transaction_date.max()
     open_invoices_feature_data = feature_engineering(open_invoices_with_payments.query("forecast_date>=invoice_date"))
     assert open_invoices_feature_data.invoice_id.value_counts().max() == 1, 'Duplicates per open invoice'
-    model = get_best_model()
+    model = _get_best_model()
     return predict(open_invoices_feature_data, model)
 
 
 if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
     invoices, payments = get_csv_test_data()
-    open_invoice_predictions = test_prediction_on_open_invoices(invoices, payments)
+    open_invoice_predictions = _test_prediction_on_open_invoices(invoices, payments)
     print(open_invoice_predictions.value_counts())
 

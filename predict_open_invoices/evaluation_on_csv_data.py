@@ -21,7 +21,7 @@ except neptune.exceptions.NeptuneModelKeyAlreadyExistsError:
     NEPTUNE_MODEL = neptune.init_model(with_id=f"{NEPTUNE_PROJECT_ID}-{NEPTUNE_MODEL_ID}", project=NEPTUNE_PROJECT_NAME)
 
 
-def create_neptune_csv_model() -> neptune.Model:
+def _create_neptune_csv_model() -> neptune.Model:
     """Create base neptune model from CSV data. Only needs to be run once."""
     url_to_project_brief = 'https://github.com/lauren7249/Data-Science-Take-Home-Project'
     NEPTUNE_PROJECT["general/brief"] = url_to_project_brief
@@ -51,6 +51,7 @@ def get_data_splits(keys: list[str] = ['train', 'test']) -> list[pandas.DataFram
     return frames
 
 
+_create_neptune_csv_model()
 TRAIN_DF, TEST_DF, VALID_DF = get_data_splits(['train', 'test', 'validation'])
 TRAIN_H2O_FRAME, TEST_H2O_FRAME = get_h2o_frame(TRAIN_DF), get_h2o_frame(TEST_DF)
 
@@ -114,7 +115,7 @@ def optuna_objective(trial):
     # predictors = ['due_per_month', 'root_exchange_rate_value_inv', 'amount_inv',
     #               'remaining_inv_pct', 'months_open']
     y = 'collected_per_month'
-    predictors = ['months_allowed', 'months_open', 'remaining_inv_pct', 'inv_pct_of_company_total']
+    predictors = ['months_allowed', 'months_open', 'remaining_inv_pct']
     predictors += ['due_per_month'] if y == 'collected_per_month' else ['month_due']
     params = \
         {'y': y, 'predictors': predictors, 'metric': 'mae',
@@ -132,6 +133,5 @@ def optuna_objective(trial):
 
 if __name__ == '__main__':
     pandas.set_option('expand_frame_repr', False)
-    create_neptune_csv_model()
     study = optuna.create_study(direction='minimize')
     study.optimize(optuna_objective, n_trials=3)

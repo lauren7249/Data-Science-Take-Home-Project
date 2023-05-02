@@ -4,7 +4,7 @@ from predict_open_invoices.utils import apply_filters, months_between
 from predict_open_invoices.csv_test_data_io import get_csv_test_data
 
 
-def prepare_payments(payments: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
+def _prepare_payments(payments: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
     """ Validate raw payments data and filter out rows that will not be scored or used in model training."""
     assert payments.invoice_id.count() == payments.__len__(), 'Missing invoice ids'
     assert payments.transaction_date.count() == payments.__len__(), 'Missing transaction dates'
@@ -17,8 +17,7 @@ def prepare_payments(payments: pandas.DataFrame) -> (pandas.DataFrame, pandas.Da
     return apply_filters(exclude_payments, payments)
 
 
-def prepare_invoices(invoices: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
-    """ Validate raw invoices data and filter out rows that will not be scored or used in model training."""
+def _validate_invoices(invoices: pandas.DataFrame):
     assert invoices.id.count() == invoices.__len__(), 'Missing IDs'
     assert invoices.invoice_date.count() == invoices.__len__(), 'Missing invoice dates'
     assert invoices.status.count() == invoices.__len__(), 'Missing statuses'
@@ -29,12 +28,16 @@ def prepare_invoices(invoices: pandas.DataFrame) -> (pandas.DataFrame, pandas.Da
     assert invoices.customer_id.count() == invoices.__len__(), 'Missing customer IDs'
     assert invoices.root_exchange_rate_value.min() > 0, 'Exchange rates <= 0'
     assert invoices.amount_inv.min() > 0, 'Amounts <= 0'
+
+
+def _prepare_invoices(invoices: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
+    """ Validate raw invoices data and filter out rows that will not be scored or used in model training."""
+    _validate_invoices(invoices)
     invoices = invoices.rename(columns={"id": "invoice_id", "amount_inv": "amount"})\
         .drop(columns=['account_id'], errors='ignore')
     invoices.loc[invoices.status == 'OPEN', 'cleared_date'] = None
     invoices['invoice_month'] = invoices.invoice_date.dt.to_period('M').dt.to_timestamp()
-    invoices['due_month'] = invoices.due_date.dt.to_period('M').dt.to_timestamp()
-    invoices['months_allowed'] = months_between(invoices.invoice_month, invoices.due_month)
+    invoices['months_allowed'] = months_between(invoices.invoice_date, invoices.due_date)
     exclude_invoices = OrderedDict()
     exclude_invoices['Missing due date'] = invoices[invoices.due_date.isnull()]
     exclude_invoices['Due before opened'] = invoices[invoices.due_date < invoices.invoice_date]
@@ -50,7 +53,7 @@ def prepare_invoices(invoices: pandas.DataFrame) -> (pandas.DataFrame, pandas.Da
     return invoices_filtered, filter_stats
 
 
-def combine_invoices_payments(invoices_prepared: pandas.DataFrame, payments_prepared: pandas.DataFrame) -> (
+def _combine_invoices_payments(invoices_prepared: pandas.DataFrame, payments_prepared: pandas.DataFrame) -> (
         pandas.DataFrame, pandas.DataFrame):
     """ Merge, validate, and create combined variables from prepared invoice and payments data.
     Output data has one row per invoice and cumulative amount paid, rounded to 4 decimal places."""
@@ -88,16 +91,17 @@ def preprocess_invoices_with_payments(invoices: pandas.DataFrame, payments: pand
     # confirm invoices are a superset of payments before filtering.
     assert len(set(payments.invoice_id) - set(invoices.id)) == 0, "Not all payments have invoice data"
     # validate and filter inputs separately
-    payments_prepared, payment_filter_stats = prepare_payments(payments)
-    invoices_prepared, invoice_filter_stats = prepare_invoices(invoices)
+    payments_prepared, payment_filter_stats = _prepare_payments(payments)
+    invoices_prepared, invoice_filter_stats = _prepare_invoices(invoices)
     # compare and consolidate inputs
-    data = combine_invoices_payments(invoices_prepared, payments_prepared)
+    data = _combine_invoices_payments(invoices_prepared, payments_prepared)
     filter_stats_dict = OrderedDict({"payments": payment_filter_stats, "invoices": invoice_filter_stats})
     filter_stats = pandas.concat(filter_stats_dict, names=['Dataset', 'Step Num'])
     return data, filter_stats
 
 
-def test_pre_processing():
+def _test_pre_processing():
+    """ Test preprocessing on local CSV data"""
     invoices, payments = get_csv_test_data()
     invoices_with_payments, filter_stats = preprocess_invoices_with_payments(invoices, payments)
     return invoices_with_payments, filter_stats
@@ -105,7 +109,7 @@ def test_pre_processing():
 
 if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
-    preprocessed_data, preprocess_filter_stats = test_pre_processing()
+    preprocessed_data, preprocess_filter_stats = _test_pre_processing()
     print(preprocess_filter_stats)
     print(preprocessed_data.columns)
     print(preprocessed_data.shape)

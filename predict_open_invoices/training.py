@@ -12,8 +12,8 @@ from predict_open_invoices.feature_engineering import feature_engineering
 h2o.init(nthreads=-1, max_mem_size=12)
 
 
-def normalize_by_company(invoice_point_in_time: pandas.DataFrame) -> pandas.DataFrame:
-    """Create invoice weights """
+def _normalize_by_company(invoice_point_in_time: pandas.DataFrame) -> pandas.DataFrame:
+    """Add row weights to invoices for training."""
     invoice_point_in_time['converted_amount_inv'] = (
             invoice_point_in_time.amount_inv * invoice_point_in_time.root_exchange_rate_value_inv)
     totals_by_company = invoice_point_in_time.groupby("company_id", as_index=False).converted_amount_inv.sum()
@@ -26,8 +26,10 @@ def normalize_by_company(invoice_point_in_time: pandas.DataFrame) -> pandas.Data
     return data
 
 
-def select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_frequency: str = 'M',
-                         first_transaction_date: pandas.Timestamp = None) -> pandas.Timestamp:
+def __select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_frequency: str = 'M',
+                           first_transaction_date: pandas.Timestamp = None) -> pandas.Timestamp:
+    """Given a set of invoice data with end dates, which can vary per row, and an overall start date, sample a date
+    period with the range during which the invoice was OPEN."""
     if pandas.isnull(max_forecast_date):
         return None
     # begin forecast window when the invoice is active and the payments data is complete
@@ -40,17 +42,17 @@ def select_forecast_date(invoice_id, invoice_date, max_forecast_date, forecast_f
     return pseudorandom.choice(period_range).to_timestamp()
 
 
-select_forecast_date = numpy.vectorize(select_forecast_date)
+_select_forecast_date = numpy.vectorize(__select_forecast_date)
 
 
 def assign_open_forecast_date(invoices_with_payments: pandas.DataFrame) -> pandas.DataFrame:
     """Add a randomly sampled forecast date while the invoice was open."""
-    invoices_with_payments['forecast_date_collected'] = select_forecast_date(
+    invoices_with_payments['forecast_date_collected'] = _select_forecast_date(
         invoices_with_payments.invoice_id, invoices_with_payments.invoice_date, invoices_with_payments.collected_date)
     assert invoices_with_payments.groupby("invoice_id").forecast_date_collected.nunique().max() == 1, \
         'Multiple forecast dates per collected invoice'
     # Open invoices can be used in training.
-    invoices_with_payments['forecast_date_uncollected'] = select_forecast_date(
+    invoices_with_payments['forecast_date_uncollected'] = _select_forecast_date(
         invoices_with_payments.invoice_id, invoices_with_payments.invoice_date, invoices_with_payments.final_date_open)
     assert invoices_with_payments.groupby("invoice_id").forecast_date_uncollected.nunique().max() == 1, \
         'Multiple forecast dates per uncollected invoice'
@@ -62,7 +64,7 @@ def assign_open_forecast_date(invoices_with_payments: pandas.DataFrame) -> panda
     return invoices_with_payments
 
 
-def post_process_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
+def _post_process_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> (pandas.DataFrame, pandas.DataFrame):
     """ Process, validate, filter, and assign collection date to invoices with payments.
      Sample forecast dates between invoice date and collection date (if present) per invoice for training."""
     # invoice is collected if/when payments accumulate to the invoice amount in the original currency.
@@ -89,10 +91,10 @@ def post_process_invoice_outcomes(invoices_with_payments: pandas.DataFrame) -> (
     return data, filter_stats
 
 
-def get_h2o_training_data(feature_data: pandas.DataFrame) -> OrderedDict[str: h2o.H2OFrame]:
+def _get_h2o_training_data(feature_data: pandas.DataFrame) -> OrderedDict[str: h2o.H2OFrame]:
     """Given a set of featurized invoices, return h2o data frames split sequentially into training, testing, and
     validation based on forecast date, weighted by the invoice amount's percentage of the client company's total."""
-    normalized_feature_data = normalize_by_company(feature_data)
+    normalized_feature_data = _normalize_by_company(feature_data)
     normalized_feature_data['inv_company_weight'] = normalized_feature_data.inv_pct_of_company_total \
         * normalized_feature_data.invoice_id.nunique() / normalized_feature_data.company_id.nunique()
     months_to_final_state = months_between(
@@ -127,12 +129,12 @@ def get_training_data_from_csvs() -> (OrderedDict[str: h2o.H2OFrame], pandas.Dat
     training_payments_filter_stats = pandas.concat([training_payments_filter_stats], names=['Dataset'],
                                                    keys=['payments'])
     invoices_with_payments, preprocess_filter_stats = preprocess_invoices_with_payments(invoices, payments_to_model)
-    invoices_to_model, post_process_filter_stats = post_process_invoice_outcomes(invoices_with_payments)
+    invoices_to_model, post_process_filter_stats = _post_process_invoice_outcomes(invoices_with_payments)
     post_process_filter_stats = pandas.concat([post_process_filter_stats], names=['Dataset'],
                                               keys=['preprocessed invoices'])
     filter_stats = pandas.concat([training_payments_filter_stats, preprocess_filter_stats, post_process_filter_stats],
                                  names=['Step Type'], keys=['Filtering', 'Pre-processing', 'Filtering'])
-    h2o_frames = get_h2o_training_data(feature_engineering(invoices_to_model))
+    h2o_frames = _get_h2o_training_data(feature_engineering(invoices_to_model))
     return h2o_frames, filter_stats
 
 
@@ -151,7 +153,7 @@ def train_model(train: h2o.H2OFrame, test: h2o.H2OFrame, predictors: list[str] =
     return aml_model
 
 
-def test_training_on_csvs(metric: str) -> \
+def _test_training_on_csvs(metric: str) -> \
         (h2o.estimators.H2OEstimator, OrderedDict[str: h2o.H2OFrame], pandas.DataFrame):
     h2o_frames, filter_stats_csv = get_training_data_from_csvs()
     params = dict(metric=metric, y='collected_per_month', distribution='huber', predictors=['due_per_month'],
@@ -163,7 +165,7 @@ def test_training_on_csvs(metric: str) -> \
 if __name__ == "__main__":
     pandas.set_option('expand_frame_repr', False)
     ml_metric = 'mae'
-    baseline_model, split_h2o_frames, training_filter_stats = test_training_on_csvs(ml_metric)
+    baseline_model, split_h2o_frames, training_filter_stats = _test_training_on_csvs(ml_metric)
     print(training_filter_stats)
     for split in split_h2o_frames.keys():
         h2o_frame = split_h2o_frames[split]

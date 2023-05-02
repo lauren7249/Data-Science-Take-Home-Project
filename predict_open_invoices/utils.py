@@ -30,6 +30,7 @@ def apply_filters(filters: OrderedDict, apply_to_df: pandas.DataFrame) -> (panda
 
 
 def get_h2o_frame(df: pandas.DataFrame) -> h2o.H2OFrame:
+    """Convert a pandas dataframe to a properly formatted H2O frame for training and prediction."""
     h2o.init(nthreads=-1, max_mem_size=12)
     id_columns_h2o = [col for col in ID_COLUMNS if col in df.columns]
     return h2o.H2OFrame(df.select_dtypes(exclude='datetime'),
