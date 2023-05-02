@@ -23,7 +23,7 @@ except neptune.exceptions.NeptuneModelKeyAlreadyExistsError:
 
 def create_neptune_csv_model() -> neptune.Model:
     """Create base model. Only needs to be run once."""
-    url_to_project_brief = 'https://docs.google.com/presentation/d/1bWMEfc8l3tMlpzF1RijV2j-JU8gDEwDq6Ks4bkT47Lo'
+    url_to_project_brief = 'https://github.com/lauren7249/Data-Science-Take-Home-Project'
     NEPTUNE_PROJECT["general/brief"] = url_to_project_brief
     NEPTUNE_PROJECT["general/eda_html_for_download"].upload("../data_analysis/eda.html")
     NEPTUNE_PROJECT["raw_dataset/invoices"].track_files(f'{DATA_FOLDER}/invoice.csv')
@@ -57,18 +57,19 @@ TRAIN_H2O_FRAME, TEST_H2O_FRAME = get_h2o_frame(TRAIN_DF), get_h2o_frame(TEST_DF
 
 def get_monthly_forecast_error(df: pandas.DataFrame, h2o_model: h2o.estimators.H2OEstimator,
                                y: str = 'collected_per_month'):
+    """Given a slice of data, outcome variable """
     predictions = predict(df, h2o_model)
-    df = df[['collected_per_month', 'month_collected', 'inv_pct_of_company_total']]
+    results = df[['collected_per_month', 'month_collected', 'inv_pct_of_company_total']].copy()
     if y == 'collected_per_month':
-        df["predict_month_collected"] = (1 / predictions).replace(numpy.inf, None).round(0)
+        results["predict_month_collected"] = (1 / predictions).replace(numpy.inf, None).round(0)
     else:
-        df['predict_month_collected'] = predictions.round(0).astype(int)
-    df = df.groupby("predict_month_collected", as_index=False).inv_pct_of_company_total.sum().merge(
-        df.groupby("month_collected", as_index=False).inv_pct_of_company_total.sum()
+        results['predict_month_collected'] = predictions.round(0).astype(int)
+    results = results.groupby("predict_month_collected", as_index=False).inv_pct_of_company_total.sum().merge(
+        results.groupby("month_collected", as_index=False).inv_pct_of_company_total.sum()
         .rename(columns={"month_collected": "predict_month_collected"}), on="predict_month_collected",
         suffixes=('_predict', ''), how="left")
-    df['abs_diff'] = (df.inv_pct_of_company_total - df.inv_pct_of_company_total_predict).abs()
-    mape = float(df.abs_diff.sum()/df.inv_pct_of_company_total_predict.sum())
+    results['abs_diff'] = (results.inv_pct_of_company_total - results.inv_pct_of_company_total_predict).abs()
+    mape = float(results.abs_diff.sum() / results.inv_pct_of_company_total_predict.sum())
     return mape
 
 
